@@ -13,8 +13,7 @@ def math(faces, img, gray):
 faceCascade = cv2.CascadeClassifier('Cascades/haarcascade_frontalface_default.xml')
 
 def capture():
-    
-    cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
     while True:
         ret, img = cap.read()
@@ -31,8 +30,7 @@ def capture():
         t1 = threading.Thread(target=math, args=(faces, img, gray))
         t1.start()
         t1.join()
-
-        cv2.imshow('video',img)
+        cv2.imshow('video', img)
 
         k = cv2.waitKey(30) & 0xff
         if k == 27: # press 'ESC' to quit

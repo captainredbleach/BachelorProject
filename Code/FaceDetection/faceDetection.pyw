@@ -2,6 +2,9 @@ import numpy as np
 import cv2
 import threading
 
+# multiple cascades: https://github.com/Itseez/opencv/tree/master/data/haarcascades
+faceCascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
 def math(faces, img, gray):
     for (x,y,w,h) in faces:
         cv2.rectangle(img,(x,y),(x+w,y+h),(255,0,0),2)
@@ -9,8 +12,7 @@ def math(faces, img, gray):
         roi_color = img[y:y+h, x:x+w]
         
 
-# multiple cascades: https://github.com/Itseez/opencv/tree/master/data/haarcascades
-faceCascade = cv2.CascadeClassifier('Cascades/haarcascade_frontalface_default.xml')
+
 
 def capture():
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)

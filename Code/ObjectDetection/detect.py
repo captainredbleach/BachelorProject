@@ -9,7 +9,7 @@ detector = hub.load("https://tfhub.dev/tensorflow/efficientdet/lite2/detection/1
 labels = pd.read_csv('D:\P6\Code\ObjectDetection\labels.csv',sep=';',index_col='ID')
 labels = labels['OBJECT (2017 REL.)']
 
-cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+cap = cv2.VideoCapture("D:\\P6\\Code\\ObjectDetection\\15FPS_720P.mp4")
 
 width = 512
 height = 512
@@ -22,7 +22,7 @@ while(True):
     #inp = cv2.resize(frame, (width, height))
 
     #Convert img to RGB
-    rgb = cv2.cvtColor(cv2.UMat(cap), cv2.COLOR_BGR2RGB)
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     #Is optional but i recommend (float convertion and convert img to tensor image)
     rgb_tensor = tf.convert_to_tensor(rgb, dtype=tf.uint8)
@@ -38,7 +38,7 @@ while(True):
     pred_boxes = boxes.numpy()[0].astype('int')
     pred_scores = scores.numpy()[0]
     #loop throughout the faces detected and place a box around it
-    
+    img_boxes = 0
     for score, (ymin,xmin,ymax,xmax), label in zip(pred_scores, pred_boxes, pred_labels):
         if score < 0.5:
             continue
@@ -52,7 +52,7 @@ while(True):
 
 
     #Display the resulting frame
-    cv2.imshow('Result',img_boxes)
+    cv2.imshow('Result', img_boxes)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 

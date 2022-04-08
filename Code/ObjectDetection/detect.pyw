@@ -1,7 +1,10 @@
 import numpy as np
 import cv2
+import os
 
-cap = cv2.VideoCapture("D:\\P6\\Code\\ObjectDetection\\15FPS_720P.mp4")
+path = os.path.dirname(os.path.realpath(__file__))
+
+cap = cv2.VideoCapture(path + "\\15FPS_720P.mp4")
 kernel = np.ones((15,5), np.uint8)
 
 while(True):

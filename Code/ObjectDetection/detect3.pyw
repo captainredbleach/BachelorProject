@@ -8,14 +8,14 @@ def process(rgb, hsv):
     
      
     # Threshold of brown in HSV space
-    lower_brown = np.array([5, 80, 100])
-    upper_brown = np.array([15, 130, 140])
+    #lower_brown = np.array([5, 80, 100])
+    #upper_brown = np.array([15, 130, 140])
  
     # preparing the mask to overlay
-    mask_b = cv2.inRange(hsv, lower_brown, upper_brown)
+    #mask_b = cv2.inRange(hsv, lower_brown, upper_brown)
     # The black region in the mask has the value of 0,
     # so when multiplied with original image removes all non-brown regions
-    result_b = cv2.bitwise_and(frame, frame, mask = mask_b)
+    #result_b = cv2.bitwise_and(frame, frame, mask = mask_b)
     
     lower_g = np.array([30, 40, 80])
     upper_g = np.array([35, 50, 150])
@@ -29,11 +29,11 @@ def process(rgb, hsv):
     
     imgGrey = cv2.cvtColor(result_g, cv2.COLOR_BGR2GRAY)
     _, thresh = cv2.threshold(imgGrey, 30, 255, cv2.THRESH_BINARY)
-    img_dilation = cv2.dilate(thresh, kernel, iterations=10)
-    img_erosion = cv2.erode(img_dilation, kernel, iterations=12)
+    img_dilation = cv2.dilate(thresh, kernel, iterations=12)
+    img_erosion = cv2.erode(img_dilation, kernel, iterations=14)
     
     img_erosion2 = cv2.erode(img_erosion, kernel, iterations=6)
-    img_dilation2 = cv2.dilate(img_erosion, kernel, iterations=30)
+    img_dilation2 = cv2.dilate(img_erosion, kernel, iterations=35)
     
     finalE = cv2.erode(img_dilation2, kernel, iterations=2)
     
@@ -45,7 +45,7 @@ def process(rgb, hsv):
     #cv2.imshow("ok", imgGrey)
     #Hough Line Transform 
 
-    linesP = cv2.HoughLinesP(img_final, 1, np.pi / 180, 50, None, 50, 10)
+    linesP = cv2.HoughLinesP(img_final, 1, np.pi / 180, 100, None, 50, 10)
 
     # Draw the lines
     if linesP is not None:

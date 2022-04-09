@@ -59,7 +59,7 @@ def process(rgb, hsv, frame):
     
 
 if __name__ == '__main__':     
-    video_name = "15FPS_720P.mp4"
+    video_name = "15FPS_720P-C.mp4"
 
     # Define the fps for the video
     fps = 30
@@ -109,6 +109,8 @@ if __name__ == '__main__':
                     pending_task.append(task)
                     
                     #result.write(rgb)
+            else:
+                break
             
         if cv2.waitKey(1) & 0xFF == ord('q'):
                 break

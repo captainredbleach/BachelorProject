@@ -10,7 +10,7 @@ def process(rgb, hsv, frame):
     
     frame = cv2.medianBlur(frame, 11)
     
-    frame = cv2.GaussianBlur(frame,(5,5),0)
+    frame = cv2.GaussianBlur(frame,(11,11),cv2.BORDER_DEFAULT)
     
     lower_g = np.array([30, 35, 80])
     upper_g = np.array([40, 40, 255])

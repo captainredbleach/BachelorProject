@@ -1,10 +1,10 @@
 import numpy as np
 import cv2
 import os
-import math
+import time
 import threading
 
-def process(rgb, hsv):
+def process(rgb, hsv, frame):
     
      
     # Threshold of brown in HSV space
@@ -17,8 +17,9 @@ def process(rgb, hsv):
     # so when multiplied with original image removes all non-brown regions
     #result_b = cv2.bitwise_and(frame, frame, mask = mask_b)
     
-    lower_g = np.array([30, 40, 80])
-    upper_g = np.array([35, 50, 150])
+    
+    lower_g = np.array([30, 30, 80])
+    upper_g = np.array([40, 40, 255])
  
     # preparing the mask to overlay
     mask_g = cv2.inRange(hsv, lower_g, upper_g)
@@ -28,24 +29,23 @@ def process(rgb, hsv):
  
     
     imgGrey = cv2.cvtColor(result_g, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(imgGrey, 30, 255, cv2.THRESH_BINARY)
-    img_dilation = cv2.dilate(thresh, kernel, iterations=12)
-    img_erosion = cv2.erode(img_dilation, kernel, iterations=14)
+    _, thresh = cv2.threshold(imgGrey, 20, 255, cv2.THRESH_BINARY)
+    img_dilation = cv2.dilate(thresh, kernel, iterations=5)
+    img_erosion = cv2.erode(img_dilation, kernel, iterations=4)
     
-    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=6)
-    img_dilation2 = cv2.dilate(img_erosion, kernel, iterations=35)
+    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=3)
+    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=50)
     
-    finalE = cv2.erode(img_dilation2, kernel, iterations=2)
+    finalE = cv2.erode(img_dilation2, kernel, iterations=1)
     
     img_final = abs(img_dilation2) - abs(finalE)
-    
     
     
     #img_dilation = cv2.dilate(img_erosion, kernel, iterations=15)
     #cv2.imshow("ok", imgGrey)
     #Hough Line Transform 
 
-    linesP = cv2.HoughLinesP(img_final, 1, np.pi / 180, 100, None, 50, 10)
+    linesP = cv2.HoughLinesP(img_final, 1, np.pi / 180, 20, None, 0, 0)
 
     # Draw the lines
     if linesP is not None:
@@ -56,46 +56,56 @@ def process(rgb, hsv):
     return rgb
     
     
-     
+
+if __name__ == '__main__':     
     
- 
+    video_name = "15FPS_720P.mp4"
 
+    # Define the fps for the video
+    fps = 30
 
-path = os.path.dirname(os.path.realpath(__file__))
+    path = os.path.dirname(os.path.realpath(__file__))
+    cap = cv2.VideoCapture(os.path.join(path, video_name))
 
-cap = cv2.VideoCapture(path + "\\15FPS_720P.mp4")
-kernel = np.ones((5,5), np.uint8)
-
-frame_width = int(cap.get(3))
-frame_height = int(cap.get(4))
-   
-size = (frame_width, frame_height)
-
-#result = cv2.VideoWriter('filename.avi', cv2.VideoWriter_fourcc(*'MJPG'), 10, size)
-
-
-
-
-while(1):
-    _, frame = cap.read()
+    # Dequeue for storing the previous K frames
+    prev_frame = None 
+    kernel = np.ones((5,5), np.uint8)
     
-    if _ == False:
-        break
-    
-    rgb = frame
-    # It converts the BGR color space of image to HSV color space
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    
-    t1 = threading.Thread(target=process, args=(rgb, hsv))
-    t1.start()
-    t1.join()
-    
-    #result.write(rgb)
-    cv2.imshow('result', rgb)
-    
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    #frame_width = int(cap.get(3))
+    #frame_height = int(cap.get(4))
+    #size = (frame_width, frame_height)
+    #result = cv2.VideoWriter('filename.avi', cv2.VideoWriter_fourcc(*'MJPG'), 10, size)
+
+
+
+
+    while(cap.isOpened()):
+        ret, cur_frame = cap.read()
+        #cur_frame_cpy = cur_frame.copy()
         
-cv2.destroyAllWindows()
-cap.release()
-#result.release()
+        if ret == False:
+            break
+        
+        if prev_frame is not None:
+            rgb = cur_frame
+            # It converts the BGR color space of image to HSV color space
+            hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
+            
+            diff = cv2.absdiff(prev_frame, cur_frame)
+            diff = cv2.medianBlur(diff, 3)
+            
+            t1 = threading.Thread(target=process, args=(rgb, hsv, diff))
+            t1.start()
+            t1.join()
+            
+            #result.write(rgb)
+            cv2.imshow('result', rgb)
+            
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        time.sleep(1 / fps)
+        prev_frame = cur_frame
+            
+    cv2.destroyAllWindows()
+    cap.release()
+    #result.release()

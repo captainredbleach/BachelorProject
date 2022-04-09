@@ -107,7 +107,7 @@ if __name__ == '__main__':
             
         if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        #time.sleep(1 / fps)
+        time.sleep(1 / fps)
         prev_frame = cur_frame
             
     cv2.destroyAllWindows()

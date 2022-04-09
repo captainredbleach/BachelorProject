@@ -8,7 +8,9 @@ from collections import deque
 def process(rgb, hsv, frame):
     
     
-    lower_g = np.array([30, 30, 80])
+    frame = cv2.medianBlur(frame, 7)
+    
+    lower_g = np.array([30, 35, 80])
     upper_g = np.array([40, 40, 255])
  
     # preparing the mask to overlay
@@ -16,27 +18,28 @@ def process(rgb, hsv, frame):
     # The black region in the mask has the value of 0,
     # so when multiplied with original image removes all non-grey regions
     result_g = cv2.bitwise_and(frame, frame, mask = mask_g)
+    
+    result_g = abs(result_g) * 5
  
     
     imgGrey = cv2.cvtColor(result_g, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(imgGrey, 15, 255, cv2.THRESH_BINARY)
-    img_dilation = cv2.dilate(thresh, kernel, iterations=5)
-    img_erosion = cv2.erode(img_dilation, kernel, iterations=5)
+    _, thresh = cv2.threshold(imgGrey, 30, 255, cv2.THRESH_BINARY)
+    img_dilation = cv2.dilate(thresh, kernel, iterations=50)
+    img_erosion = cv2.erode(img_dilation, kernel, iterations=80)
     
-    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=4)
-    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=50)
+    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=6)
+    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=60)
     
     finalE = cv2.erode(img_dilation2, kernel, iterations=1)
     
     img_final = abs(img_dilation2) - abs(finalE)
     
     
-    #img_dilation = cv2.dilate(img_erosion, kernel, iterations=15)
-    #cv2.imshow("ok", imgGrey)
-    #Hough Line Transform 
+    
     countours,hierarchy=cv2.findContours(img_final,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
     cv2.drawContours(rgb,countours,-1,(0,0,255),2)
     
+    #Hough Line Transform 
     #linesP = cv2.HoughLinesP(img_final, 1, np.pi / 180, 20, None, 0, 0)
 
     # Draw the lines
@@ -79,7 +82,6 @@ if __name__ == '__main__':
         while len(pending_task) > 0 and pending_task[0].ready():
             res = pending_task.popleft().get()
             cv2.imshow('threaded video', res)
-            cv2.imshow('background subtraction', diff)
             
         
         #cur_frame_cpy = cur_frame.copy()
@@ -94,8 +96,9 @@ if __name__ == '__main__':
                     hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
                     
                     diff = cv2.absdiff(prev_frame, cur_frame)
-                    diff = cv2.medianBlur(diff, 3)
-                    diff = diff *2
+                    diff = diff * 2
+                    
+                    
                     
                     task = pool.apply_async(process, (rgb, hsv, diff))
                     pending_task.append(task)
@@ -104,7 +107,7 @@ if __name__ == '__main__':
             
         if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        time.sleep(1 / fps)
+        #time.sleep(1 / fps)
         prev_frame = cur_frame
             
     cv2.destroyAllWindows()

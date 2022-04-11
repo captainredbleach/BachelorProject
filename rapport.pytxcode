@@ -1,6 +1,6 @@
 =>PYTHONTEX:SETTINGS#
 version=0.18
-outputdir=pythontex-files-rapport
+outputdir=pythontex-files-Rapport
 workingdir=.
 workingdirset=false
 gobble=none

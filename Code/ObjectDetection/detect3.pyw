@@ -26,7 +26,7 @@ def process(rgb, hsv, frame):
  
     
     imgGrey = cv2.cvtColor(result_g, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(imgGrey, 30, 255, cv2.THRESH_BINARY)
+    _, thresh = cv2.threshold(imgGrey, 35, 255, cv2.THRESH_BINARY)
     img_dilation = cv2.dilate(thresh, kernel, iterations=50)
     img_erosion = cv2.erode(img_dilation, kernel, iterations=80)
     
@@ -55,6 +55,7 @@ if __name__ == '__main__':
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
 
+    
     # Dequeue for storing the previous K frames
     prev_frame = None 
     kernel = np.ones((5,5), np.uint8)
@@ -80,6 +81,8 @@ if __name__ == '__main__':
         #cur_frame_cpy = cur_frame.copy()
         if len(pending_task) < thread_num:
             ret, cur_frame = cap.read()
+            cur_frame = cv2.resize(cur_frame, (1280, 720))
+            #cur_frame = cur_frame[0:550, 400:900]
             if ret:
                 
         

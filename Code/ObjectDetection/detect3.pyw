@@ -14,7 +14,7 @@ def process(rgb, hsv, frame):
     frame = cv2.GaussianBlur(frame,(11,11), cv2.BORDER_DEFAULT)
     
     lower_g = np.array([30, 35, 80])
-    upper_g = np.array([40, 40, 255])
+    upper_g = np.array([35, 40, 255])
  
     # preparing the mask to overlay
     mask_g = cv2.inRange(hsv, lower_g, upper_g)
@@ -39,6 +39,8 @@ def process(rgb, hsv, frame):
     cnts = cv2.findContours(finalE, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
     for c in cnts:
+        c = max(cnts, key = cv2.contourArea)
+        x,y,w,h = cv2.boundingRect(c)
         x,y,w,h = cv2.boundingRect(c)
         cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
             

@@ -11,13 +11,20 @@ def process(rgb, hsv, frame):
 
     frame = cv2.medianBlur(frame, 11)
     
-    frame = cv2.GaussianBlur(frame,(11,11), cv2.BORDER_DEFAULT)
+    
     
     lower_g = np.array([30, 35, 80])
     upper_g = np.array([35, 40, 255])
  
     # preparing the mask to overlay
     mask_g = cv2.inRange(hsv, lower_g, upper_g)
+    
+    mask_g = cv2.GaussianBlur(mask_g,(11,11), cv2.BORDER_DEFAULT)
+    
+    mask_g = cv2.dilate(mask_g, None, iterations = 2)
+    
+    mask_g = cv2.erode(mask_g, None, iterations = 4)
+    #Dilate the resultant image to restore our target
     # The black region in the mask has the value of 0,
     # so when multiplied with original image removes all non-grey regions
     result_g = cv2.bitwise_and(frame, frame, mask = mask_g)
@@ -27,11 +34,12 @@ def process(rgb, hsv, frame):
     
     imgGrey = cv2.cvtColor(result_g, cv2.COLOR_BGR2GRAY)
     _, thresh = cv2.threshold(imgGrey, 35, 255, cv2.THRESH_BINARY)
+    thresh = cv2.erode(thresh, kernel, iterations = 2)
     img_dilation = cv2.dilate(thresh, kernel, iterations=50)
-    img_erosion = cv2.erode(img_dilation, kernel, iterations=80)
+    img_erosion = cv2.erode(img_dilation, kernel, iterations=60)
     
-    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=6)
-    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=60)
+    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=8)
+    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=50)
     
     finalE = cv2.erode(img_dilation2, kernel, iterations=1)
     
@@ -39,8 +47,7 @@ def process(rgb, hsv, frame):
     cnts = cv2.findContours(finalE, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
     for c in cnts:
-        c = max(cnts, key = cv2.contourArea)
-        x,y,w,h = cv2.boundingRect(c)
+        #c = max(cnts, key = cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
         cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
             

@@ -11,35 +11,27 @@ def process(rgb, hsv, frame):
 
     frame = cv2.medianBlur(frame, 11)
     
-    
+    frame = cv2.GaussianBlur(frame,(11,11), cv2.BORDER_DEFAULT)
     
     lower_g = np.array([30, 35, 80])
-    upper_g = np.array([35, 40, 255])
+    upper_g = np.array([40, 40, 255])
  
     # preparing the mask to overlay
     mask_g = cv2.inRange(hsv, lower_g, upper_g)
-    
-    mask_g = cv2.GaussianBlur(mask_g,(11,11), cv2.BORDER_DEFAULT)
-    
-    mask_g = cv2.dilate(mask_g, None, iterations = 2)
-    
-    mask_g = cv2.erode(mask_g, None, iterations = 4)
-    #Dilate the resultant image to restore our target
     # The black region in the mask has the value of 0,
     # so when multiplied with original image removes all non-grey regions
-    result_g = cv2.bitwise_and(frame, frame, mask = mask_g)
+    result_g = cv2.bitwise_and(abs(rgb)*2, frame, mask = mask_g)
     
-    result_g = abs(result_g) * 5
+    result_g = abs(result_g) * 4
  
     
     imgGrey = cv2.cvtColor(result_g, cv2.COLOR_BGR2GRAY)
     _, thresh = cv2.threshold(imgGrey, 35, 255, cv2.THRESH_BINARY)
-    thresh = cv2.erode(thresh, kernel, iterations = 2)
     img_dilation = cv2.dilate(thresh, kernel, iterations=50)
-    img_erosion = cv2.erode(img_dilation, kernel, iterations=60)
+    img_erosion = cv2.erode(img_dilation, kernel, iterations=80)
     
-    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=8)
-    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=50)
+    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=6)
+    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=60)
     
     finalE = cv2.erode(img_dilation2, kernel, iterations=1)
     
@@ -47,9 +39,10 @@ def process(rgb, hsv, frame):
     cnts = cv2.findContours(finalE, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
     for c in cnts:
-        #c = max(cnts, key = cv2.contourArea)
+        c = max(cnts, key = cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
         cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
+
             
     return rgb
     
@@ -90,9 +83,10 @@ if __name__ == '__main__':
         #cur_frame_cpy = cur_frame.copy()
         if len(pending_task) < thread_num:
             ret, cur_frame = cap.read()
-            cur_frame = cv2.resize(cur_frame, (1280, 720))
+            
             #cur_frame = cur_frame[0:550, 400:900]
             if ret:
+                cur_frame = cv2.resize(cur_frame, (1280, 720))
                 
         
                 if prev_frame is not None:
@@ -114,7 +108,7 @@ if __name__ == '__main__':
             
         if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        time.sleep(1 / fps)
+        #time.sleep(1 / fps)
         prev_frame = cur_frame
             
     cv2.destroyAllWindows()

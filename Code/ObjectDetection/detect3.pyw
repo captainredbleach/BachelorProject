@@ -7,28 +7,32 @@ from collections import deque
 
 def process(rgb, hsv, frame):
     
+    
+    frame = frame[0:1280, 400:950]
+    
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    
+    clahe = cv2.createCLAHE(clipLimit=2, tileGridSize=(5,10))
+    frame = clahe.apply(frame)
+    
     frame = cv2.bilateralFilter(frame, 11, 11, 11)
 
     frame = cv2.medianBlur(frame, 11)
     
     frame = cv2.GaussianBlur(frame,(11,11), cv2.BORDER_DEFAULT)
     
-    
     lower_g = np.array([30, 35, 80])
     upper_g = np.array([40, 40, 255])
  
     # preparing the mask to overlay
-    mask_g = cv2.inRange(hsv, lower_g, upper_g)
+    mask_g = cv2.inRange(hsv[0:1280, 400:950], lower_g, upper_g)
     # The black region in the mask has the value of 0,
     # so when multiplied with original image removes all non-grey regions
-    result_g = cv2.bitwise_and(abs(rgb)*2, frame, mask = mask_g)
+    result_g = cv2.bitwise_and(frame, frame, mask = mask_g)
     
     result_g = abs(result_g) * 4
- 
-    imgGrey = cv2.cvtColor(result_g, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=30.0, tileGridSize=(5,5))
-    imgGrey = clahe.apply(imgGrey)
-    _, thresh = cv2.threshold(imgGrey, 75, 255, cv2.THRESH_BINARY)
+    
+    _, thresh = cv2.threshold(result_g, 75, 255, cv2.THRESH_BINARY)
     img_dilation = cv2.dilate(thresh, kernel, iterations=48)
     img_erosion = cv2.erode(img_dilation, kernel, iterations=50)
     
@@ -56,14 +60,18 @@ def process(rgb, hsv, frame):
     # Combine the two images to get the foreground.
     im_out = img_final | im_floodfill_inv
     
-    #rgb = img_erosion3
+    #rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2LUV)
     
     cnts = cv2.findContours(im_out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
     for c in cnts:
-        c = max(cnts, key = cv2.contourArea)
-        x,y,w,h = cv2.boundingRect(c)
-        cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
+        rect = cv2.minAreaRect(c)       #I have used min Area rect for better result
+        width = rect[1][0]
+        height = rect[1][1]
+        if (width<400) and (height <800) and (width >= 150) and (height > 200):
+            c = max(cnts, key = cv2.contourArea)
+            x,y,w,h = cv2.boundingRect(c)
+            cv2.rectangle(rgb[0:1280, 400:950], (x, y), (x + w, y + h), (0,0,255), 2)
 
             
     return rgb
@@ -71,7 +79,7 @@ def process(rgb, hsv, frame):
     
 
 if __name__ == '__main__':     
-    video_name = "15FPS_720P-C.mp4"
+    video_name = "15FPS_720P.mp4"
 
     # Define the fps for the video
     fps = 30
@@ -117,7 +125,7 @@ if __name__ == '__main__':
                     hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
                     
                     diff = cv2.absdiff(prev_frame, cur_frame)
-                    diff = diff * 2
+                    #diff = diff * 2
                     
                     
                     

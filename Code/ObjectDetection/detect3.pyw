@@ -13,6 +13,7 @@ def process(rgb, hsv, frame):
     
     frame = cv2.GaussianBlur(frame,(11,11), cv2.BORDER_DEFAULT)
     
+    
     lower_g = np.array([30, 35, 80])
     upper_g = np.array([40, 40, 255])
  
@@ -24,19 +25,40 @@ def process(rgb, hsv, frame):
     
     result_g = abs(result_g) * 4
  
-    
     imgGrey = cv2.cvtColor(result_g, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(imgGrey, 35, 255, cv2.THRESH_BINARY)
-    img_dilation = cv2.dilate(thresh, kernel, iterations=50)
-    img_erosion = cv2.erode(img_dilation, kernel, iterations=80)
+    clahe = cv2.createCLAHE(clipLimit=30.0, tileGridSize=(5,5))
+    imgGrey = clahe.apply(imgGrey)
+    _, thresh = cv2.threshold(imgGrey, 75, 255, cv2.THRESH_BINARY)
+    img_dilation = cv2.dilate(thresh, kernel, iterations=48)
+    img_erosion = cv2.erode(img_dilation, kernel, iterations=50)
     
-    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=6)
+    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=1)
     img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=60)
+    img_erosion3 = cv2.erode(img_dilation2, kernel, iterations=40)
     
-    finalE = cv2.erode(img_dilation2, kernel, iterations=1)
+    finalE = cv2.erode(img_erosion3, kernel, iterations=4)
+    img_final = abs(img_erosion3) - abs(finalE)
     
     
-    cnts = cv2.findContours(finalE, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    im_floodfill = img_final.copy()
+
+    # Mask used to flood filling.
+    # Notice the size needs to be 2 pixels than the image.
+    h, w = img_final.shape[:2]
+    mask = np.zeros((h+2, w+2), np.uint8)
+
+    # Floodfill from point (0, 0)
+    cv2.floodFill(im_floodfill, mask, (0,0), 255);
+
+    # Invert floodfilled image
+    im_floodfill_inv = cv2.bitwise_not(im_floodfill)
+
+    # Combine the two images to get the foreground.
+    im_out = img_final | im_floodfill_inv
+    
+    #rgb = img_erosion3
+    
+    cnts = cv2.findContours(im_out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
     for c in cnts:
         c = max(cnts, key = cv2.contourArea)
@@ -49,10 +71,10 @@ def process(rgb, hsv, frame):
     
 
 if __name__ == '__main__':     
-    video_name = "15FPS_720P.mp4"
+    video_name = "15FPS_720P-C.mp4"
 
     # Define the fps for the video
-    fps = 15
+    fps = 30
 
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
@@ -108,7 +130,7 @@ if __name__ == '__main__':
             
         if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        #time.sleep(1 / fps)
+        time.sleep(1 / fps)
         prev_frame = cur_frame
             
     cv2.destroyAllWindows()

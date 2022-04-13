@@ -15,7 +15,7 @@ def process(rgb, hsv, frame):
     clahe = cv2.createCLAHE(clipLimit=2, tileGridSize=(5,10))
     frame = clahe.apply(frame)
     
-    frame = cv2.bilateralFilter(frame, 11, 11, 11)
+    frame = cv2.bilateralFilter(frame, 5, 11, 11)
 
     frame = cv2.medianBlur(frame, 11)
     
@@ -37,15 +37,14 @@ def process(rgb, hsv, frame):
     img_erosion = cv2.erode(img_dilation, kernel, iterations=50)
     
     img_erosion2 = cv2.erode(img_erosion, kernel, iterations=1)
-    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=60)
-    img_erosion3 = cv2.erode(img_dilation2, kernel, iterations=40)
+    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=55)
+    img_erosion3 = cv2.erode(img_dilation2, kernel, iterations=45)
     
     finalE = cv2.erode(img_erosion3, kernel, iterations=4)
     img_final = abs(img_erosion3) - abs(finalE)
     
     
     im_floodfill = img_final.copy()
-
     # Mask used to flood filling.
     # Notice the size needs to be 2 pixels than the image.
     h, w = img_final.shape[:2]
@@ -58,9 +57,9 @@ def process(rgb, hsv, frame):
     im_floodfill_inv = cv2.bitwise_not(im_floodfill)
 
     # Combine the two images to get the foreground.
-    im_out = img_final | im_floodfill_inv
+    im_out = img_final | im_floodfill_inv 
     
-    #rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2LUV)
+    #rgb = im_out
     
     cnts = cv2.findContours(im_out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
@@ -68,7 +67,7 @@ def process(rgb, hsv, frame):
         rect = cv2.minAreaRect(c)       #I have used min Area rect for better result
         width = rect[1][0]
         height = rect[1][1]
-        if (width<400) and (height <800) and (width >= 150) and (height > 200):
+        if (width<400) and (height < 800) and (width >= 150) and (height > 200):
             c = max(cnts, key = cv2.contourArea)
             x,y,w,h = cv2.boundingRect(c)
             cv2.rectangle(rgb[0:1280, 400:950], (x, y), (x + w, y + h), (0,0,255), 2)
@@ -79,7 +78,7 @@ def process(rgb, hsv, frame):
     
 
 if __name__ == '__main__':     
-    video_name = "15FPS_720P.mp4"
+    video_name = "30FPS_720P.mp4"
 
     # Define the fps for the video
     fps = 30

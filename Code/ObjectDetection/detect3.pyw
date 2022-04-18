@@ -8,8 +8,6 @@ from collections import deque
 def process(rgb, hsv, frame):
     
     
-    frame = frame[0:1280, 400:950]
-    
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     
     clahe = cv2.createCLAHE(clipLimit=2, tileGridSize=(5,10))
@@ -25,7 +23,7 @@ def process(rgb, hsv, frame):
     upper_g = np.array([40, 40, 255])
  
     # preparing the mask to overlay
-    mask_g = cv2.inRange(hsv[0:1280, 400:950], lower_g, upper_g)
+    mask_g = cv2.inRange(hsv, lower_g, upper_g)
     # The black region in the mask has the value of 0,
     # so when multiplied with original image removes all non-grey regions
     result_g = cv2.bitwise_and(frame, frame, mask = mask_g)
@@ -70,7 +68,7 @@ def process(rgb, hsv, frame):
         if (width<400) and (height < 800) and (width >= 150) and (height > 200):
             c = max(cnts, key = cv2.contourArea)
             x,y,w,h = cv2.boundingRect(c)
-            cv2.rectangle(rgb[0:1280, 400:950], (x, y), (x + w, y + h), (0,0,255), 2)
+            cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
 
             
     return rgb
@@ -94,16 +92,8 @@ if __name__ == '__main__':
     thread_num = cv2.getNumberOfCPUs()
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
-    
-    #frame_width = int(cap.get(3))
-    #frame_height = int(cap.get(4))
-    #size = (frame_width, frame_height)
-    #result = cv2.VideoWriter('filename.avi', cv2.VideoWriter_fourcc(*'MJPG'), 10, size)
 
-
-
-
-    while(cap.isOpened()):
+    while cap.isOpened():
         while len(pending_task) > 0 and pending_task[0].ready():
             res = pending_task.popleft().get()
             cv2.imshow('result', res)
@@ -119,19 +109,15 @@ if __name__ == '__main__':
                 
         
                 if prev_frame is not None:
-                    rgb = cur_frame
                     # It converts the BGR color space of image to HSV color space
                     hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
                     
                     diff = cv2.absdiff(prev_frame, cur_frame)
                     #diff = diff * 2
                     
-                    
-                    
-                    task = pool.apply_async(process, (rgb, hsv, diff))
+                    task = pool.apply_async(process, (cur_frame, hsv, diff))
                     pending_task.append(task)
                     
-                    #result.write(rgb)
             else:
                 break
             
@@ -142,4 +128,3 @@ if __name__ == '__main__':
             
     cv2.destroyAllWindows()
     cap.release()
-    #result.release()

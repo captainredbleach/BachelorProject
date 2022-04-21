@@ -1,3 +1,4 @@
+from re import S
 import numpy as np
 import cv2
 import os
@@ -12,8 +13,8 @@ def process(rgb, hsv, frame):
     
     clahe = cv2.createCLAHE(clipLimit=2, tileGridSize=(5,10))
     frame = clahe.apply(frame)
-    
-    frame = cv2.bilateralFilter(frame, 5, 11, 11)
+
+    frame = cv2.bilateralFilter(frame, 5, 75, 75)
 
     frame = cv2.medianBlur(frame, 11)
     
@@ -46,10 +47,10 @@ def process(rgb, hsv, frame):
     # Mask used to flood filling.
     # Notice the size needs to be 2 pixels than the image.
     h, w = img_final.shape[:2]
-    mask = np.zeros((h+2, w+2), np.uint8)
+    maskf = np.zeros((h+2, w+2), np.uint8)
 
     # Floodfill from point (0, 0)
-    cv2.floodFill(im_floodfill, mask, (0,0), 255);
+    cv2.floodFill(im_floodfill, maskf, (0,0), 255);
 
     # Invert floodfilled image
     im_floodfill_inv = cv2.bitwise_not(im_floodfill)
@@ -71,12 +72,12 @@ def process(rgb, hsv, frame):
             cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
 
             
-    return rgb
+    return rgb, None
     
     
 
 if __name__ == '__main__':     
-    video_name = "30FPS_720P.mp4"
+    video_name = "15FPS_720P.mp4"
 
     # Define the fps for the video
     fps = 30
@@ -95,14 +96,16 @@ if __name__ == '__main__':
 
     while cap.isOpened():
         while len(pending_task) > 0 and pending_task[0].ready():
-            res = pending_task.popleft().get()
+            res, debug = pending_task.popleft().get()
             cv2.imshow('result', res)
+            if debug is not None:
+                cv2.imshow('debug', debug)
             
         
         #cur_frame_cpy = cur_frame.copy()
         if len(pending_task) < thread_num:
             ret, cur_frame = cap.read()
-            
+             
             #cur_frame = cur_frame[0:550, 400:900]
             if ret:
                 cur_frame = cv2.resize(cur_frame, (1280, 720))

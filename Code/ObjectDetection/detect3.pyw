@@ -1,4 +1,3 @@
-from re import S
 import numpy as np
 import cv2
 import os
@@ -8,10 +7,9 @@ from collections import deque
 
 def process(rgb, hsv, frame):
     
-    
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     
-    clahe = cv2.createCLAHE(clipLimit=2, tileGridSize=(5,10))
+    clahe = cv2.createCLAHE(clipLimit=1, tileGridSize=(60,107))
     frame = clahe.apply(frame)
 
     frame = cv2.bilateralFilter(frame, 5, 75, 75)
@@ -73,18 +71,16 @@ def process(rgb, hsv, frame):
 
             
     return rgb, None
-    
-    
 
 if __name__ == '__main__':     
     video_name = "15FPS_720P.mp4"
 
     # Define the fps for the video
-    fps = 30
+    
 
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
-
+    
     
     # Dequeue for storing the previous K frames
     prev_frame = None 
@@ -93,16 +89,16 @@ if __name__ == '__main__':
     thread_num = cv2.getNumberOfCPUs()
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
+    fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
 
     while cap.isOpened():
         while len(pending_task) > 0 and pending_task[0].ready():
+            #print(len(pending_task))
             res, debug = pending_task.popleft().get()
             cv2.imshow('result', res)
             if debug is not None:
-                cv2.imshow('debug', debug)
-            
-        
-        #cur_frame_cpy = cur_frame.copy()
+                cv2.imshow('debug', debug)    
+                
         if len(pending_task) < thread_num:
             ret, cur_frame = cap.read()
              
@@ -115,9 +111,9 @@ if __name__ == '__main__':
                     # It converts the BGR color space of image to HSV color space
                     hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
                     
-                    diff = cv2.absdiff(prev_frame, cur_frame)
+                    diff = cv2.absdiff(prev_frame, cur_frame, 0.1)
                     #diff = diff * 2
-                    
+                    #process(cur_frame, hsv, diff)
                     task = pool.apply_async(process, (cur_frame, hsv, diff))
                     pending_task.append(task)
                     

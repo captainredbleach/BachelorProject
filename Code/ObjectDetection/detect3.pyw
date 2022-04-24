@@ -1,3 +1,4 @@
+from threading import Thread
 import numpy as np
 import cv2
 import os
@@ -6,7 +7,6 @@ from multiprocessing.pool import ThreadPool
 from collections import deque
 
 def process(rgb, hsv, frame):
-    
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     
     clahe = cv2.createCLAHE(clipLimit=1, tileGridSize=(60,107))
@@ -29,6 +29,7 @@ def process(rgb, hsv, frame):
     
     result_g = abs(result_g) * 4
     
+    kernel = np.ones((5,5), np.uint8)
     _, thresh = cv2.threshold(result_g, 75, 255, cv2.THRESH_BINARY)
     img_dilation = cv2.dilate(thresh, kernel, iterations=48)
     img_erosion = cv2.erode(img_dilation, kernel, iterations=50)
@@ -72,25 +73,15 @@ def process(rgb, hsv, frame):
             
     return rgb, None
 
-if __name__ == '__main__':     
+def frameIO():
     video_name = "15FPS_720P.mp4"
-
-    # Define the fps for the video
-    
-
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
-    
-    
-    # Dequeue for storing the previous K frames
     prev_frame = None 
-    kernel = np.ones((5,5), np.uint8)
-    
     thread_num = cv2.getNumberOfCPUs()
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
-
     while cap.isOpened():
         while len(pending_task) > 0 and pending_task[0].ready():
             #print(len(pending_task))
@@ -102,7 +93,6 @@ if __name__ == '__main__':
         if len(pending_task) < thread_num:
             ret, cur_frame = cap.read()
              
-            #cur_frame = cur_frame[0:550, 400:900]
             if ret:
                 cur_frame = cv2.resize(cur_frame, (1280, 720))
                 
@@ -124,6 +114,13 @@ if __name__ == '__main__':
                 break
         time.sleep(1 / fps)
         prev_frame = cur_frame
-            
     cv2.destroyAllWindows()
     cap.release()
+
+def main():
+    p1 = Thread(target=frameIO) 
+    p1.start()
+    p1.join()
+
+if __name__ == '__main__':
+    main()

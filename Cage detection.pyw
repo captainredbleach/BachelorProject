@@ -4,7 +4,7 @@ import cv2
 import os
 import time
 from multiprocessing.pool import ThreadPool
-from collections import deque
+from collections import deque, current_process
 
 def filtering(frame):
     frame = cv2.bilateralFilter(frame, 5, 75, 75)
@@ -100,11 +100,12 @@ def process(rgb, hsv, frame):
                     cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
             else:
                 pass
-
-    return rgb, edge
+            
+    #print(current_process().name)
+    return rgb, None
 
 def frameIO():
-    thread_num = cv2.getNumberOfCPUs()
+    thread_num = cv2.getNumberOfCPUs() - 1
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     

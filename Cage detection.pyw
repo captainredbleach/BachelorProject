@@ -6,6 +6,15 @@ import time
 from multiprocessing.pool import ThreadPool
 from collections import deque
 
+def filtering(frame):
+    frame = cv2.bilateralFilter(frame, 5, 75, 75)
+    
+    frame = cv2.medianBlur(frame, 11)
+    
+    frame = cv2.GaussianBlur(frame,(11,11), cv2.BORDER_DEFAULT)
+    
+    return frame
+
 def flood(img_final):
     im_floodfill = img_final.copy()
     # Mask used to flood filling.
@@ -26,12 +35,8 @@ def flood(img_final):
 def process(rgb, hsv, frame):
     
     edge = cv2.Canny(frame, 150, 170, apertureSize=3)
-
-    frame = cv2.bilateralFilter(frame, 5, 75, 75)
     
-    frame = cv2.medianBlur(frame, 11)
-    
-    frame = cv2.GaussianBlur(frame,(11,11), cv2.BORDER_DEFAULT)
+    frame = filtering(frame)
 
     lower_g = np.array([25, 30, 80])
     upper_g = np.array([40, 40, 255])
@@ -45,7 +50,7 @@ def process(rgb, hsv, frame):
     # so when multiplied with original image removes all non-grey regions
     result_g = cv2.bitwise_and(frame, frame, mask = mask_E)
     
-    result_g = abs(result_g) * 4
+    result_g = np.abs(result_g) * 4
     
     kernel = np.ones((5,5), np.uint8)
     _, thresh = cv2.threshold(result_g, 65, 255, cv2.THRESH_BINARY)
@@ -57,12 +62,10 @@ def process(rgb, hsv, frame):
     img_erosion3 = cv2.erode(img_dilation2, kernel, iterations=45)
     
     finalE = cv2.erode(img_erosion3, kernel, iterations=4)
-    img_final = abs(img_erosion3) - abs(finalE)
+    img_final = np.abs(img_erosion3) - np.abs(finalE)
     
     
     im_out = flood(img_final)
-    
-    #rgb = im_out
     
     cnts = cv2.findContours(im_out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
@@ -85,7 +88,7 @@ def process(rgb, hsv, frame):
             erosion_b = cv2.erode(thresh_b, kernel, iterations=1)
             dilation_b = cv2.dilate(erosion_b, kernel, iterations=10)
             finalB = cv2.erode(dilation_b, kernel, iterations=2)
-            img_finalb = abs(dilation_b) - abs(finalB)
+            img_finalb = np.abs(dilation_b) - np.abs(finalB)
             b_out = flood(img_finalb)
             bcnts = cv2.findContours(b_out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if bcnts[1] is not None:
@@ -98,8 +101,7 @@ def process(rgb, hsv, frame):
             else:
                 pass
 
-            
-    return rgb, None
+    return rgb, edge
 
 def frameIO():
     thread_num = cv2.getNumberOfCPUs()
@@ -125,7 +127,7 @@ def frameIO():
             
             if ret:
                 cur_frame = cv2.resize(cur_frame, (1280, 720))
-                cv2.normalize(cur_frame, cur_frame, 0, 255, cv2.NORM_MINMAX)
+                
         
                 if prev_frame is not None:
                     # It converts the BGR color space of image to HSV color space
@@ -135,6 +137,8 @@ def frameIO():
                     clahe = cv2.createCLAHE(clipLimit=2, tileGridSize=(6,11))
                     prev_frame = clahe.apply(prev_frame)
                     diff_frame = clahe.apply(diff_frame)
+                    cv2.normalize(diff_frame, diff_frame, 0, 255, cv2.NORM_MINMAX)
+                    cv2.normalize(prev_frame, prev_frame, 0, 255, cv2.NORM_MINMAX)
                     diff = cv2.absdiff(prev_frame, diff_frame, 0.5)
                     #diff = diff * 2
                     #process(cur_frame, hsv, diff)

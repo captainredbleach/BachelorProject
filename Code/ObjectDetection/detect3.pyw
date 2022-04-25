@@ -74,14 +74,16 @@ def process(rgb, hsv, frame):
     return rgb, None
 
 def frameIO():
-    video_name = "15FPS_720P.mp4"
-    path = os.path.dirname(os.path.realpath(__file__))
-    cap = cv2.VideoCapture(os.path.join(path, video_name))
-    prev_frame = None 
     thread_num = cv2.getNumberOfCPUs()
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
+    
+    video_name = "30FPS_720P.mp4"
+    path = os.path.dirname(os.path.realpath(__file__))
+    cap = cv2.VideoCapture(os.path.join(path, video_name))
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
+    prev_frame = None 
+    
     while cap.isOpened():
         while len(pending_task) > 0 and pending_task[0].ready():
             #print(len(pending_task))
@@ -121,6 +123,7 @@ def main():
     p1 = Thread(target=frameIO) 
     p1.start()
     p1.join()
+    #RFID her
 
 if __name__ == '__main__':
     main()

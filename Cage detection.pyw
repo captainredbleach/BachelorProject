@@ -6,6 +6,23 @@ import time
 from multiprocessing.pool import ThreadPool
 from collections import deque
 
+def flood(img_final):
+    im_floodfill = img_final.copy()
+    # Mask used to flood filling.
+    # Notice the size needs to be 2 pixels than the image.
+    h, w = img_final.shape[:2]
+    maskf = np.zeros((h+2, w+2), np.uint8)
+
+    # Floodfill from point (0, 0)
+    cv2.floodFill(im_floodfill, maskf, (0,0), 255);
+
+    # Invert floodfilled image
+    im_floodfill_inv = cv2.bitwise_not(im_floodfill)
+
+    # Combine the two images to get the foreground.
+    
+    return img_final | im_floodfill_inv 
+
 def process(rgb, hsv, frame):
     
     edge = cv2.Canny(frame, 150, 170, apertureSize=3)
@@ -43,20 +60,7 @@ def process(rgb, hsv, frame):
     img_final = abs(img_erosion3) - abs(finalE)
     
     
-    im_floodfill = img_final.copy()
-    # Mask used to flood filling.
-    # Notice the size needs to be 2 pixels than the image.
-    h, w = img_final.shape[:2]
-    maskf = np.zeros((h+2, w+2), np.uint8)
-
-    # Floodfill from point (0, 0)
-    cv2.floodFill(im_floodfill, maskf, (0,0), 255);
-
-    # Invert floodfilled image
-    im_floodfill_inv = cv2.bitwise_not(im_floodfill)
-
-    # Combine the two images to get the foreground.
-    im_out = img_final | im_floodfill_inv 
+    im_out = flood(img_final)
     
     #rgb = im_out
     
@@ -66,10 +70,29 @@ def process(rgb, hsv, frame):
         rect = cv2.minAreaRect(c)
         width = rect[1][0]
         height = rect[1][1]
-        if (width < 400) and (height < 800) and (width >= 150) and (height > 200) and ((width * 1.15 < h) or (h * 1.15 < w)):
+        if (width < 400) and (height < 800) and (width >= 150) and (height > 200) and ((width * 1.15 < height) or (height * 1.15 < width)):
             c = max(cnts, key = cv2.contourArea)
             x,y,w,h = cv2.boundingRect(c)
             cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
+            tC = hsv[y:y + h, x:x + w]
+            lower_b = np.array([15, 100, 20])
+            upper_b = np.array([20, 255, 200])
+            mask_b = cv2.inRange(tC, lower_b, upper_b)
+            result_b = cv2.bitwise_and(tC, tC, mask = mask_b)
+            result_b = cv2.cvtColor(result_b, cv2.COLOR_HSV2BGR)
+            result_b = cv2.cvtColor(result_b, cv2.COLOR_BGR2GRAY)
+            thresh_b = cv2.threshold(result_b, 20, 255, cv2.THRESH_BINARY)[1]
+            erosion_b = cv2.erode(thresh_b, kernel, iterations=1)
+            dilation_b = cv2.dilate(erosion_b, kernel, iterations=10)
+            finalB = cv2.erode(dilation_b, kernel, iterations=2)
+            img_finalb = abs(dilation_b) - abs(finalB)
+            b_out = flood(img_finalb)
+            bcnts = cv2.findContours(b_out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            bcnts = bcnts[0] if len(bcnts) == 2 else bcnts[1]
+            for bc in bcnts:
+                bc = max(bcnts, key = cv2.contourArea)
+                bx,by,bw,bh = cv2.boundingRect(bc)
+                cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
 
             
     return rgb, None
@@ -79,7 +102,7 @@ def frameIO():
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "15FPS_720P.mp4"
+    video_name = "15FPS_720P-C.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num

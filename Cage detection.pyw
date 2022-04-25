@@ -4,14 +4,16 @@ import cv2
 import os
 import time
 from multiprocessing.pool import ThreadPool
-from collections import deque, current_process
+from multiprocessing.pool import ThreadPool
+from multiprocessing import current_process
+from collections import deque
 
 def filtering(frame):
     frame = cv2.bilateralFilter(frame, 5, 75, 75)
     
-    frame = cv2.medianBlur(frame, 11)
+    frame = cv2.medianBlur(frame, 15)
     
-    frame = cv2.GaussianBlur(frame,(11,11), cv2.BORDER_DEFAULT)
+    frame = cv2.GaussianBlur(frame,(15,15), cv2.BORDER_DEFAULT)
     
     return frame
 
@@ -34,12 +36,12 @@ def flood(img_final):
 
 def process(rgb, hsv, frame):
     
-    edge = cv2.Canny(frame, 150, 170, apertureSize=3)
+    edge = cv2.Canny(frame, 140, 160, apertureSize=3, L2gradient = True)
     
     frame = filtering(frame)
 
-    lower_g = np.array([25, 30, 80])
-    upper_g = np.array([40, 40, 255])
+    lower_g = np.array([30, 15, 15])
+    upper_g = np.array([90, 40, 240])
  
     # preparing the mask to overlay
     mask_g = cv2.inRange(hsv, lower_g, upper_g)
@@ -53,16 +55,15 @@ def process(rgb, hsv, frame):
     result_g = np.abs(result_g) * 4
     
     kernel = np.ones((5,5), np.uint8)
-    _, thresh = cv2.threshold(result_g, 65, 255, cv2.THRESH_BINARY)
-    img_dilation = cv2.dilate(thresh, kernel, iterations=48)
-    img_erosion = cv2.erode(img_dilation, kernel, iterations=50)
+    thresh = cv2.threshold(result_g, 5, 255, cv2.THRESH_BINARY)[1]
+    img_dilation = cv2.dilate(thresh, kernel, iterations=50)
+    img_erosion = cv2.erode(img_dilation, kernel, iterations=65)
     
-    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=1)
-    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=55)
-    img_erosion3 = cv2.erode(img_dilation2, kernel, iterations=45)
+    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=2)
+    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=30)
     
-    finalE = cv2.erode(img_erosion3, kernel, iterations=4)
-    img_final = np.abs(img_erosion3) - np.abs(finalE)
+    finalE = cv2.erode(img_dilation2, kernel, iterations=4)
+    img_final = np.abs(img_dilation2) - np.abs(finalE)
     
     
     im_out = flood(img_final)
@@ -102,14 +103,14 @@ def process(rgb, hsv, frame):
                 pass
             
     #print(current_process().name)
-    return rgb, None
+    return rgb, mask_E
 
 def frameIO():
     thread_num = cv2.getNumberOfCPUs() - 1
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "15FPS_720P.mp4"
+    video_name = "30FPS_720P.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num

@@ -1,3 +1,0 @@
-Code/FaceDetection/*.mp4 filter=lfs diff=lfs merge=lfs -text
-Code/ObjectDetection/*.mp4 filter=lfs diff=lfs merge=lfs -text
-Code/ObjectDetection/*.h5 filter=lfs diff=lfs merge=lfs -text

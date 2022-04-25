@@ -88,11 +88,15 @@ def process(rgb, hsv, frame):
             img_finalb = abs(dilation_b) - abs(finalB)
             b_out = flood(img_finalb)
             bcnts = cv2.findContours(b_out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            bcnts = bcnts[0] if len(bcnts) == 2 else bcnts[1]
-            for bc in bcnts:
-                bc = max(bcnts, key = cv2.contourArea)
-                bx,by,bw,bh = cv2.boundingRect(bc)
-                cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
+            if bcnts[1] is not None:
+                print("Cage with box")
+                bcnts = bcnts[0] if len(bcnts) == 2 else bcnts[1]
+                for bc in bcnts:
+                    bc = max(bcnts, key = cv2.contourArea)
+                    bx,by,bw,bh = cv2.boundingRect(bc)
+                    cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
+            else:
+                pass
 
             
     return rgb, None
@@ -102,7 +106,7 @@ def frameIO():
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "15FPS_720P-C.mp4"
+    video_name = "15FPS_720P.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num

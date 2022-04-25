@@ -7,30 +7,31 @@ from multiprocessing.pool import ThreadPool
 from collections import deque
 
 def process(rgb, hsv, frame):
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     
-    clahe = cv2.createCLAHE(clipLimit=1, tileGridSize=(60,107))
-    frame = clahe.apply(frame)
+    edge = cv2.Canny(frame, 150, 170, apertureSize=3)
 
     frame = cv2.bilateralFilter(frame, 5, 75, 75)
-
+    
     frame = cv2.medianBlur(frame, 11)
     
     frame = cv2.GaussianBlur(frame,(11,11), cv2.BORDER_DEFAULT)
-    
-    lower_g = np.array([30, 35, 80])
+
+    lower_g = np.array([25, 30, 80])
     upper_g = np.array([40, 40, 255])
  
     # preparing the mask to overlay
     mask_g = cv2.inRange(hsv, lower_g, upper_g)
+    
+    mask_E = cv2.bitwise_and(mask_g, edge)
+
     # The black region in the mask has the value of 0,
     # so when multiplied with original image removes all non-grey regions
-    result_g = cv2.bitwise_and(frame, frame, mask = mask_g)
+    result_g = cv2.bitwise_and(frame, frame, mask = mask_E)
     
     result_g = abs(result_g) * 4
     
     kernel = np.ones((5,5), np.uint8)
-    _, thresh = cv2.threshold(result_g, 75, 255, cv2.THRESH_BINARY)
+    _, thresh = cv2.threshold(result_g, 65, 255, cv2.THRESH_BINARY)
     img_dilation = cv2.dilate(thresh, kernel, iterations=48)
     img_erosion = cv2.erode(img_dilation, kernel, iterations=50)
     
@@ -62,10 +63,10 @@ def process(rgb, hsv, frame):
     cnts = cv2.findContours(im_out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
     for c in cnts:
-        rect = cv2.minAreaRect(c)       #I have used min Area rect for better result
+        rect = cv2.minAreaRect(c)
         width = rect[1][0]
         height = rect[1][1]
-        if (width<400) and (height < 800) and (width >= 150) and (height > 200):
+        if (width < 400) and (height < 800) and (width >= 150) and (height > 200) and ((width * 1.15 < h) or (h * 1.15 < w)):
             c = max(cnts, key = cv2.contourArea)
             x,y,w,h = cv2.boundingRect(c)
             cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
@@ -78,7 +79,7 @@ def frameIO():
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "30FPS_720P.mp4"
+    video_name = "15FPS_720P.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
@@ -94,16 +95,20 @@ def frameIO():
                 
         if len(pending_task) < thread_num:
             ret, cur_frame = cap.read()
-             
+            
             if ret:
                 cur_frame = cv2.resize(cur_frame, (1280, 720))
-                
+                cv2.normalize(cur_frame, cur_frame, 0, 255, cv2.NORM_MINMAX)
         
                 if prev_frame is not None:
                     # It converts the BGR color space of image to HSV color space
                     hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
-                    
-                    diff = cv2.absdiff(prev_frame, cur_frame, 0.1)
+                    prev_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+                    diff_frame = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2GRAY)
+                    clahe = cv2.createCLAHE(clipLimit=2, tileGridSize=(6,11))
+                    prev_frame = clahe.apply(prev_frame)
+                    diff_frame = clahe.apply(diff_frame)
+                    diff = cv2.absdiff(prev_frame, diff_frame, 0.5)
                     #diff = diff * 2
                     #process(cur_frame, hsv, diff)
                     task = pool.apply_async(process, (cur_frame, hsv, diff))
@@ -115,7 +120,7 @@ def frameIO():
         if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         time.sleep(1 / fps)
-        prev_frame = cur_frame
+        prev_frame = cur_frame.copy()
     cv2.destroyAllWindows()
     cap.release()
 

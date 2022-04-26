@@ -4,7 +4,6 @@ import cv2
 import os
 import time
 from multiprocessing.pool import ThreadPool
-from multiprocessing.pool import ThreadPool
 from multiprocessing import current_process
 from collections import deque
 

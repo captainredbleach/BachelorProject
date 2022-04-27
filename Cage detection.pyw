@@ -10,9 +10,9 @@ from collections import deque
 def filtering(frame):
     frame = cv2.bilateralFilter(frame, 5, 75, 75)
     
-    frame = cv2.medianBlur(frame, 15)
+    frame = cv2.medianBlur(frame, 3)
     
-    frame = cv2.GaussianBlur(frame,(15,15), cv2.BORDER_DEFAULT)
+    frame = cv2.GaussianBlur(frame,(3,3), cv2.BORDER_DEFAULT)
     
     return frame
 
@@ -54,13 +54,13 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
         for bc in bcnts:
             bc = max(bcnts, key = cv2.contourArea)
             bx,by,bw,bh = cv2.boundingRect(bc)
-            if (bw < 400) and (bh < 400) and (bw >= 50) and (bh > 75):
+            if (bw < 400) and (bh < 400) and (bw >= 100) and (bh > 100):
                 cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
 
 
 def process(rgb, hsv, frame):
     
-    edge = cv2.Canny(frame, 140, 160, apertureSize=3, L2gradient = True)
+    edge = cv2.Canny(frame, 150, 200, apertureSize=3, L2gradient = True)
     
     frame = filtering(frame)
 
@@ -79,7 +79,7 @@ def process(rgb, hsv, frame):
     result_g = np.abs(result_g) * 4
     
     kernel = np.ones((5,5), np.uint8)
-    thresh = cv2.threshold(result_g, 40, 255, cv2.THRESH_BINARY)[1]
+    thresh = cv2.threshold(result_g, 50, 255, cv2.THRESH_BINARY)[1]
     img_dilation = cv2.dilate(thresh, kernel, iterations=50)
     img_erosion = cv2.erode(img_dilation, kernel, iterations=65)
     
@@ -142,7 +142,7 @@ def frameIO():
                     diff_frame = clahe.apply(diff_frame)
                     cv2.normalize(diff_frame, diff_frame, 0, 255, cv2.NORM_MINMAX)
                     cv2.normalize(prev_frame, prev_frame, 0, 255, cv2.NORM_MINMAX)
-                    diff = cv2.absdiff(prev_frame, diff_frame, 0.5)
+                    diff = cv2.absdiff(prev_frame, diff_frame, 0.95)
                     #diff = diff * 2
                     #process(cur_frame, hsv, diff)
                     task = pool.apply_async(process, (cur_frame, hsv, diff))

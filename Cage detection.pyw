@@ -33,6 +33,31 @@ def flood(img_final):
     
     return img_final | im_floodfill_inv 
 
+def findbox(TempC, kernel, rgb, x,y,w,h):
+    TempC = filtering(TempC)
+    lower_b = np.array([10, 80, 20])
+    upper_b = np.array([20, 255, 200])
+    mask_b = cv2.inRange(TempC, lower_b, upper_b)
+    result_b = cv2.bitwise_and(TempC, TempC, mask = mask_b)
+    result_b = cv2.cvtColor(result_b, cv2.COLOR_HSV2BGR)
+    result_b = cv2.cvtColor(result_b, cv2.COLOR_BGR2GRAY)
+    thresh_b = cv2.threshold(result_b, 20, 255, cv2.THRESH_BINARY)[1]
+    erosion_b = cv2.erode(thresh_b, kernel, iterations=1)
+    dilation_b = cv2.dilate(erosion_b, kernel, iterations=10)
+    finalB = cv2.erode(dilation_b, kernel, iterations=2)
+    img_finalb = np.abs(dilation_b) - np.abs(finalB)
+    b_out = flood(img_finalb)
+    bcnts = cv2.findContours(b_out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if bcnts[1] is not None:
+        #print("Cage with box")
+        bcnts = bcnts[0] if len(bcnts) == 2 else bcnts[1]
+        for bc in bcnts:
+            bc = max(bcnts, key = cv2.contourArea)
+            bx,by,bw,bh = cv2.boundingRect(bc)
+            if (bw < 400) and (bh < 400) and (bw >= 50) and (bh > 75):
+                cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
+
+
 def process(rgb, hsv, frame):
     
     edge = cv2.Canny(frame, 140, 160, apertureSize=3, L2gradient = True)
@@ -54,62 +79,39 @@ def process(rgb, hsv, frame):
     result_g = np.abs(result_g) * 4
     
     kernel = np.ones((5,5), np.uint8)
-    thresh = cv2.threshold(result_g, 5, 255, cv2.THRESH_BINARY)[1]
+    thresh = cv2.threshold(result_g, 40, 255, cv2.THRESH_BINARY)[1]
     img_dilation = cv2.dilate(thresh, kernel, iterations=50)
     img_erosion = cv2.erode(img_dilation, kernel, iterations=65)
     
-    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=2)
-    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=30)
+    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=4)
+    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=25)
     
-    finalE = cv2.erode(img_dilation2, kernel, iterations=4)
+    finalE = cv2.erode(img_dilation2, kernel, iterations=8)
     img_final = np.abs(img_dilation2) - np.abs(finalE)
     
     
     im_out = flood(img_final)
-    
     cnts = cv2.findContours(im_out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
     for c in cnts:
-        rect = cv2.minAreaRect(c)
-        width = rect[1][0]
-        height = rect[1][1]
-        if (width < 400) and (height < 800) and (width >= 150) and (height > 200) and ((width * 1.15 < height) or (height * 1.15 < width)):
-            c = max(cnts, key = cv2.contourArea)
-            x,y,w,h = cv2.boundingRect(c)
+        c = max(cnts, key = cv2.contourArea)
+        x,y,w,h = cv2.boundingRect(c)
+        if (w < 500) and (h < 800) and (w >= 150) and (h > 200) and ((w*1.1 < h) or (h*1.1 < w)):
             cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
-            tC = hsv[y:y + h, x:x + w]
-            lower_b = np.array([15, 100, 20])
-            upper_b = np.array([20, 255, 200])
-            mask_b = cv2.inRange(tC, lower_b, upper_b)
-            result_b = cv2.bitwise_and(tC, tC, mask = mask_b)
-            result_b = cv2.cvtColor(result_b, cv2.COLOR_HSV2BGR)
-            result_b = cv2.cvtColor(result_b, cv2.COLOR_BGR2GRAY)
-            thresh_b = cv2.threshold(result_b, 20, 255, cv2.THRESH_BINARY)[1]
-            erosion_b = cv2.erode(thresh_b, kernel, iterations=1)
-            dilation_b = cv2.dilate(erosion_b, kernel, iterations=10)
-            finalB = cv2.erode(dilation_b, kernel, iterations=2)
-            img_finalb = np.abs(dilation_b) - np.abs(finalB)
-            b_out = flood(img_finalb)
-            bcnts = cv2.findContours(b_out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if bcnts[1] is not None:
-                print("Cage with box")
-                bcnts = bcnts[0] if len(bcnts) == 2 else bcnts[1]
-                for bc in bcnts:
-                    bc = max(bcnts, key = cv2.contourArea)
-                    bx,by,bw,bh = cv2.boundingRect(bc)
-                    cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
-            else:
-                pass
+            TempC = hsv[y:y + h, x:x + w]
+            t1 = Thread(target=findbox, args=(TempC, kernel, rgb, x,y,w,h)) 
+            t1.start()
+            t1.join()
             
     #print(current_process().name)
-    return rgb, mask_E
+    return rgb, None
 
 def frameIO():
     thread_num = cv2.getNumberOfCPUs() - 1
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "30FPS_720P.mp4"
+    video_name = "15FPS_720P-C.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
@@ -157,9 +159,9 @@ def frameIO():
     cap.release()
 
 def main():
-    p1 = Thread(target=frameIO) 
-    p1.start()
-    p1.join()
+    T1 = Thread(target=frameIO) 
+    T1.start()
+    T1.join()
     #RFID her
 
 if __name__ == '__main__':

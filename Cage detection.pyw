@@ -1,3 +1,4 @@
+import multiprocessing
 from threading import Thread
 import numpy as np
 import cv2
@@ -22,7 +23,7 @@ def flood(img_final):
     # Notice the size needs to be 2 pixels than the image.
     h, w = img_final.shape[:2]
     maskf = np.zeros((h+2, w+2), np.uint8)
-
+    
     # Floodfill from point (0, 0)
     cv2.floodFill(im_floodfill, maskf, (0,0), 255);
 
@@ -103,18 +104,17 @@ def process(rgb, hsv, frame):
             t1.start()
             t1.join()
             
-    #print(current_process().name)
     return rgb, None
 
 def frameIO():
-    thread_num = cv2.getNumberOfCPUs() - 1
+    thread_num = multiprocessing.cpu_count()
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "15FPS_720P-C.mp4"
+    video_name = "15FPS_720P.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
-    fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
+    #fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
     prev_frame = None 
     
     while cap.isOpened():
@@ -153,7 +153,7 @@ def frameIO():
             
         if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        time.sleep(1 / fps)
+        #time.sleep(1 / fps)
         prev_frame = cur_frame.copy()
     cv2.destroyAllWindows()
     cap.release()

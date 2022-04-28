@@ -85,9 +85,9 @@ def process(rgb, hsv, frame):
     img_erosion = cv2.erode(img_dilation, kernel, iterations=65)
     
     img_erosion2 = cv2.erode(img_erosion, kernel, iterations=4)
-    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=25)
+    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=30)
     
-    finalE = cv2.erode(img_dilation2, kernel, iterations=8)
+    finalE = cv2.erode(img_dilation2, kernel, iterations=4)
     img_final = np.abs(img_dilation2) - np.abs(finalE)
     
     
@@ -97,12 +97,12 @@ def process(rgb, hsv, frame):
     for c in cnts:
         c = max(cnts, key = cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
-        if (w < 500) and (h < 800) and (w >= 150) and (h > 200) and ((w*1.1 < h) or (h*1.1 < w)):
+        if (w < 500) and (h < 800) and (w >= 150) and (h > 200):
             cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
             TempC = hsv[y:y + h, x:x + w]
             t1 = Thread(target=findbox, args=(TempC, kernel, rgb, x,y,w,h)) 
             t1.start()
-            t1.join()
+            #t1.join()
             
     return rgb, None
 
@@ -111,7 +111,7 @@ def frameIO():
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "15FPS_720P.mp4"
+    video_name = "15FPS_720P-C.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     #fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
@@ -153,7 +153,7 @@ def frameIO():
             
         if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        #time.sleep(1 / fps)
+        time.sleep(1 / 15)
         prev_frame = cur_frame.copy()
     cv2.destroyAllWindows()
     cap.release()

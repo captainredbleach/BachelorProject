@@ -7,6 +7,14 @@ import time
 from multiprocessing.pool import ThreadPool
 from multiprocessing import current_process
 from collections import deque
+import queue
+
+my_queue = queue.Queue()
+
+def storeInQueue(f):
+    def wrapper(*args):
+        my_queue.put(f(*args))
+    return wrapper
 
 def filtering(frame):
     frame = cv2.bilateralFilter(frame, 5, 75, 75)
@@ -25,7 +33,7 @@ def flood(img_final):
     maskf = np.zeros((h+2, w+2), np.uint8)
     
     # Floodfill from point (0, 0)
-    cv2.floodFill(im_floodfill, None, (0,0), 255);
+    cv2.floodFill(im_floodfill, maskf, (0,0), 255);
 
     # Invert floodfilled image
     im_floodfill_inv = cv2.bitwise_not(im_floodfill)
@@ -34,21 +42,18 @@ def flood(img_final):
     
     return img_final | im_floodfill_inv 
 
+@storeInQueue
 def findbox(TempC, kernel, rgb, x,y,w,h):
-    TempC = filtering(TempC)
-    lower_b = np.array([7, 40, 20])
-    upper_b = np.array([22, 255, 210])
+    lower_b = np.array([10, 60, 20])
+    upper_b = np.array([15, 255, 200])
     mask_b = cv2.inRange(TempC, lower_b, upper_b)
     result_b = cv2.bitwise_and(TempC, TempC, mask = mask_b)
-    result_b = cv2.cvtColor(result_b, cv2.COLOR_HSV2BGR)
-    result_b = cv2.cvtColor(result_b, cv2.COLOR_BGR2GRAY)
+    result_bf = cv2.cvtColor(result_b, cv2.COLOR_HSV2BGR)
+    result_b = cv2.cvtColor(result_bf, cv2.COLOR_BGR2GRAY)
     thresh_b = cv2.threshold(result_b, 1, 255, cv2.THRESH_BINARY)[1]
-    #erosion_b = cv2.erode(thresh_b, kernel, iterations=1)
-    dilation_b = cv2.dilate(thresh_b, kernel, iterations=10)
-    finalB = cv2.erode(dilation_b, kernel, iterations=2)
-    img_finalb = np.abs(dilation_b) - np.abs(finalB)
-    b_out = flood(img_finalb)
-    bcnts = cv2.findContours(b_out, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    dilation_b = cv2.dilate(thresh_b, kernel, iterations=15)
+    erosion_b = cv2.dilate(dilation_b, kernel, iterations=15)
+    bcnts = cv2.findContours(erosion_b, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if bcnts[1] is not None:
         #print("Cage with box")
         bcnts = bcnts[0] if len(bcnts) == 2 else bcnts[1]
@@ -57,6 +62,7 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
             bx,by,bw,bh = cv2.boundingRect(bc)
             if (bw >= 100) and (bh > 100):
                 cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
+    return erosion_b
 
 
 def process(rgb, hsv, frame):
@@ -92,19 +98,21 @@ def process(rgb, hsv, frame):
     
     
     #im_out = flood(img_final)
+    br = None
     cnts = cv2.findContours(finalE, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
     for c in cnts:
         c = max(cnts, key = cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
-        if (w < 1100) and (h < 650) and (w >= 300) and (h > 200):
+        if (w < 1100) and (h < 600) and (w >= 300) and (h > 200):
             cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
             TempC = hsv[y:y + h, x:x + w]
             t1 = Thread(target=findbox, args=(TempC, kernel, rgb, x,y,w,h)) 
             t1.start()
-            #t1.join()
+            br = my_queue.get()
             
-    return rgb, finalE
+    
+    return rgb, br
 
 def frameIO():
     thread_num = multiprocessing.cpu_count()

@@ -25,23 +25,6 @@ def filtering(frame):
     
     return frame
 
-def flood(img_final):
-    im_floodfill = img_final.copy()
-    # Mask used to flood filling.
-    # Notice the size needs to be 2 pixels than the image.
-    h, w = img_final.shape[:2]
-    maskf = np.zeros((h+2, w+2), np.uint8)
-    
-    # Floodfill from point (0, 0)
-    cv2.floodFill(im_floodfill, maskf, (0,0), 255);
-
-    # Invert floodfilled image
-    im_floodfill_inv = cv2.bitwise_not(im_floodfill)
-
-    # Combine the two images to get the foreground.
-    
-    return img_final | im_floodfill_inv 
-
 @storeInQueue
 def findbox(TempC, kernel, rgb, x,y,w,h):
     lower_b = np.array([25, 50, 100])
@@ -101,10 +84,7 @@ def process(rgb, hsv, frame):
     img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=50)
     
     finalE = cv2.erode(img_dilation2, kernel, iterations=70)
-    #img_final = np.abs(img_erosion3) - np.abs(finalE)
-    
-    
-    #im_out = flood(img_final)
+
     res = None
     br = None
     cnts = cv2.findContours(finalE, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -133,7 +113,6 @@ def frameIO():
     #fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
     prev_frame = None
     pts = deque(maxlen = 20)
-    counter = 0
     dirX = ''
     while cap.isOpened():
         while len(pending_task) > 0 and pending_task[0].ready():
@@ -144,14 +123,11 @@ def frameIO():
             
             if debug is not None:
                 cv2.imshow('debug', debug)   
-            if counter >= 5 and pts[-5] and pts[0] is not None:
-                dX = pts[-5] - pts[0]
-                if np.abs(dX) > 150:
+            if pts[-1] and pts[0] is not None:
+                dX = pts.pop() - pts.popleft()
+                if np.abs(dX) > 100:
                     dirX = 'Venstre' if np.sign(dX) == 1 else 'Højre'
-                print("dirx ", dirX)
-                
-            
-            counter += 1
+                    print("dirx ", dirX)
             
                 
         if len(pending_task) < thread_num:
@@ -162,29 +138,15 @@ def frameIO():
                 
         
                 if prev_frame is not None:
-                    # It converts the BGR color space of image to HSV color space
-                    #hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
+
                     rgb = cur_frame.copy()
                     hsv = cv2.cvtColor(rgb, cv2.COLOR_BGR2HSV_FULL)
-                    #prevhsv = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2HSV_FULL)
-                    #hsv = cv2.absdiff(prevhsv, hsv, 0.95)
-                    
-                    '''prev_dframe = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
-                    diff_frame = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2GRAY)
-                    clahe = cv2.createCLAHE(clipLimit=0.1, tileGridSize=(6,11))
-                    prev_frame = clahe.apply(prev_dframe)
-                    diff_frame = clahe.apply(diff_frame)
-                    cv2.normalize(diff_frame, diff_frame, 0, 255, cv2.NORM_MINMAX)
-                    cv2.normalize(prev_dframe, prev_dframe, 0, 255, cv2.NORM_MINMAX)
-                    diff = cv2.absdiff(prev_dframe, diff_frame, scale=0.95)'''
                     diff = cv2.absdiff(prev_frame, rgb, 0.95)
                     cv2.normalize(diff, diff, 0, 255, cv2.NORM_MINMAX)
                     diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
                     clahe = cv2.createCLAHE(clipLimit=0.1, tileGridSize=(6,11))
                     diff = clahe.apply(diff)
-                    
-                    #diff = diff * 2
-                    #process(cur_frame, hsv, diff)
+
                     task = pool.apply_async(process, (rgb, hsv, diff))
                     pending_task.append(task)
                     
@@ -193,7 +155,7 @@ def frameIO():
             
         if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        time.sleep(1 / 15)
+        #time.sleep(1 / fps)
         prev_frame = cur_frame.copy()
     cv2.destroyAllWindows()
     cap.release()

@@ -44,16 +44,16 @@ def flood(img_final):
 
 @storeInQueue
 def findbox(TempC, kernel, rgb, x,y,w,h):
-    lower_b = np.array([10, 60, 20])
-    upper_b = np.array([15, 255, 200])
+    lower_b = np.array([25, 50, 100])
+    upper_b = np.array([30, 100, 130])
     mask_b = cv2.inRange(TempC, lower_b, upper_b)
-    result_b = cv2.bitwise_and(TempC, TempC, mask = mask_b)
-    result_bf = cv2.cvtColor(result_b, cv2.COLOR_HSV2BGR)
-    result_b = cv2.cvtColor(result_bf, cv2.COLOR_BGR2GRAY)
+    result_b = cv2.bitwise_and(rgb[y:y + h, x:x + w], rgb[y:y + h, x:x + w], mask = mask_b)
+    result_b = cv2.cvtColor(result_b, cv2.COLOR_BGR2GRAY)
     thresh_b = cv2.threshold(result_b, 1, 255, cv2.THRESH_BINARY)[1]
-    dilation_b = cv2.dilate(thresh_b, kernel, iterations=15)
-    erosion_b = cv2.dilate(dilation_b, kernel, iterations=15)
+    dilation_b = cv2.dilate(thresh_b, kernel, iterations=2)
+    erosion_b = cv2.dilate(dilation_b, kernel, iterations=3)
     bcnts = cv2.findContours(erosion_b, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cX = 0
     if bcnts[1] is not None:
         #print("Cage with box")
         bcnts = bcnts[0] if len(bcnts) == 2 else bcnts[1]
@@ -62,12 +62,19 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
             bx,by,bw,bh = cv2.boundingRect(bc)
             if (bw >= 100) and (bh > 100):
                 cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
-    return erosion_b
+                M = cv2.moments(bc)
+                cX = int(M["m10"] / M["m00"])
+                cY = int(M["m01"] / M["m00"])
+                cv2.circle(rgb[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
+    if cX != 0:
+        return (x + cX), None
+    else:
+        return None, None
 
 
 def process(rgb, hsv, frame):
     
-    edge = cv2.Canny(frame, 150, 200, apertureSize=3, L2gradient = False)
+    edge = cv2.Canny(frame, 150, 200, apertureSize=3, L2gradient = True)
     
     frame = filtering(frame)
     #lower_g = np.array([5, 30, 10])
@@ -85,7 +92,7 @@ def process(rgb, hsv, frame):
     result_g = cv2.bitwise_and(frame, frame, mask = mask_E)
     
     kernel = np.ones((5,5), np.uint8)
-    thresha = cv2.threshold(result_g, 27, 255, cv2.THRESH_TOZERO_INV)[1]
+    thresha = cv2.threshold(result_g, 58, 255, cv2.THRESH_TOZERO_INV)[1]
     thresh = cv2.threshold(thresha, 1, 255, cv2.THRESH_BINARY)[1]
     img_dilation = cv2.dilate(thresh, kernel, iterations=32)
     img_erosion = cv2.erode(img_dilation, kernel, iterations=33)
@@ -98,6 +105,7 @@ def process(rgb, hsv, frame):
     
     
     #im_out = flood(img_final)
+    res = None
     br = None
     cnts = cv2.findContours(finalE, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = cnts[0] if len(cnts) == 2 else cnts[1]
@@ -109,10 +117,10 @@ def process(rgb, hsv, frame):
             TempC = hsv[y:y + h, x:x + w]
             t1 = Thread(target=findbox, args=(TempC, kernel, rgb, x,y,w,h)) 
             t1.start()
-            br = my_queue.get()
+            res, br = my_queue.get()
             
     
-    return rgb, br
+    return rgb, res, br
 
 def frameIO():
     thread_num = multiprocessing.cpu_count()
@@ -123,14 +131,28 @@ def frameIO():
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     #fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
-    prev_frame = None 
+    prev_frame = None
+    pts = deque(maxlen = 20)
+    counter = 0
+    dirX = ''
     while cap.isOpened():
         while len(pending_task) > 0 and pending_task[0].ready():
             #print(len(pending_task))
-            res, debug = pending_task.popleft().get()
+            res, diX, debug = pending_task.popleft().get()
+            pts.appendleft(diX)
             cv2.imshow('result', res)
+            
             if debug is not None:
-                cv2.imshow('debug', debug)    
+                cv2.imshow('debug', debug)   
+            if counter >= 5 and pts[-5] and pts[0] is not None:
+                dX = pts[-5] - pts[0]
+                if np.abs(dX) > 150:
+                    dirX = 'Venstre' if np.sign(dX) == 1 else 'Højre'
+                print("dirx ", dirX)
+                
+            
+            counter += 1
+            
                 
         if len(pending_task) < thread_num:
             ret, cur_frame = cap.read()
@@ -144,17 +166,22 @@ def frameIO():
                     #hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
                     rgb = cur_frame.copy()
                     hsv = cv2.cvtColor(rgb, cv2.COLOR_BGR2HSV_FULL)
-                    prevhsv = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2HSV_FULL)
-                    hsv = cv2.absdiff(prevhsv, hsv, 0.95)
+                    #prevhsv = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2HSV_FULL)
+                    #hsv = cv2.absdiff(prevhsv, hsv, 0.95)
                     
-                    prev_dframe = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+                    '''prev_dframe = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
                     diff_frame = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2GRAY)
                     clahe = cv2.createCLAHE(clipLimit=0.1, tileGridSize=(6,11))
                     prev_frame = clahe.apply(prev_dframe)
                     diff_frame = clahe.apply(diff_frame)
                     cv2.normalize(diff_frame, diff_frame, 0, 255, cv2.NORM_MINMAX)
                     cv2.normalize(prev_dframe, prev_dframe, 0, 255, cv2.NORM_MINMAX)
-                    diff = cv2.absdiff(prev_dframe, diff_frame, 0.95)
+                    diff = cv2.absdiff(prev_dframe, diff_frame, scale=0.95)'''
+                    diff = cv2.absdiff(prev_frame, rgb, 0.95)
+                    cv2.normalize(diff, diff, 0, 255, cv2.NORM_MINMAX)
+                    diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+                    clahe = cv2.createCLAHE(clipLimit=0.1, tileGridSize=(6,11))
+                    diff = clahe.apply(diff)
                     
                     #diff = diff * 2
                     #process(cur_frame, hsv, diff)

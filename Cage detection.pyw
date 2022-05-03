@@ -63,7 +63,7 @@ def process(rgb, hsv, frame):
     #lower_g = np.array([5, 30, 10])
     #upper_g = np.array([20, 255, 30])
     lower_g = np.array([0, 0, 30])
-    upper_g = np.array([360, 15, 120])
+    upper_g = np.array([360, 35, 90])
  
     # preparing the mask to overlay
     mask_g = cv2.inRange(hsv, lower_g, upper_g)
@@ -81,7 +81,7 @@ def process(rgb, hsv, frame):
     img_erosion = cv2.erode(img_dilation, kernel, iterations=33)
     
     img_erosion2 = cv2.erode(img_erosion, kernel, iterations=1)
-    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=50)
+    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=55)
     
     finalE = cv2.erode(img_dilation2, kernel, iterations=70)
 
@@ -123,10 +123,10 @@ def frameIO():
             
             if debug is not None:
                 cv2.imshow('debug', debug)   
-            if pts[-1] and pts[0] is not None:
+            if pts[-1] and pts[0] is not None and len(pts) >= 2:
                 dX = pts.pop() - pts.popleft()
                 if np.abs(dX) > 100:
-                    dirX = 'Venstre' if np.sign(dX) == 1 else 'Højre'
+                    dirX = 'Left' if np.sign(dX) == 1 else 'Right'
                     print("dirx ", dirX)
             
                 
@@ -144,7 +144,7 @@ def frameIO():
                     diff = cv2.absdiff(prev_frame, rgb, 0.95)
                     cv2.normalize(diff, diff, 0, 255, cv2.NORM_MINMAX)
                     diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-                    clahe = cv2.createCLAHE(clipLimit=0.1, tileGridSize=(6,11))
+                    clahe = cv2.createCLAHE(clipLimit=1, tileGridSize=(6,11))
                     diff = clahe.apply(diff)
 
                     task = pool.apply_async(process, (rgb, hsv, diff))

@@ -1,3 +1,4 @@
+from itertools import count
 import multiprocessing
 from threading import Thread
 import numpy as np
@@ -40,15 +41,14 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
     if bcnts[1] is not None:
         #print("Cage with box")
         bcnts = bcnts[0] if len(bcnts) == 2 else bcnts[1]
-        for bc in bcnts:
-            bc = max(bcnts, key = cv2.contourArea)
-            bx,by,bw,bh = cv2.boundingRect(bc)
-            if (bw >= 100) and (bh > 100):
-                cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
-                M = cv2.moments(bc)
-                cX = int(M["m10"] / M["m00"])
-                cY = int(M["m01"] / M["m00"])
-                cv2.circle(rgb[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
+        bc = max(bcnts, key = cv2.contourArea)
+        bx,by,bw,bh = cv2.boundingRect(bc)
+        if (bw >= 100) and (bh > 100):
+            cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
+            M = cv2.moments(bc)
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+            cv2.circle(rgb[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
     if cX != 0:
         return (x + cX), None
     else:
@@ -56,17 +56,20 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
 
 
 def process(rgb, hsv, frame):
-    
-    edge = cv2.Canny(frame, 150, 200, apertureSize=3, L2gradient = True)
-    
+    kernel = np.ones((5,5), np.uint8)
+    edge = cv2.Canny(frame, 150, 180, apertureSize=3, L2gradient = True)
+    edge = cv2.dilate(edge, kernel, iterations=3)
+    edge = cv2.erode(edge, kernel, iterations=8)
     frame = filtering(frame)
     #lower_g = np.array([5, 30, 10])
     #upper_g = np.array([20, 255, 30])
-    lower_g = np.array([0, 0, 30])
-    upper_g = np.array([360, 35, 90])
+    lower_g = np.array([0, 25, 75])
+    upper_g = np.array([360, 30, 110])
  
     # preparing the mask to overlay
     mask_g = cv2.inRange(hsv, lower_g, upper_g)
+    mask_g = cv2.dilate(mask_g, None, iterations=2)
+    mask_g = cv2.erode(mask_g, None, iterations=2)
     
     mask_E = cv2.bitwise_and(mask_g, edge)
 
@@ -74,22 +77,23 @@ def process(rgb, hsv, frame):
     # so when multiplied with original image removes all non-grey regions
     result_g = cv2.bitwise_and(frame, frame, mask = mask_E)
     
-    kernel = np.ones((5,5), np.uint8)
-    thresha = cv2.threshold(result_g, 58, 255, cv2.THRESH_TOZERO_INV)[1]
-    thresh = cv2.threshold(thresha, 1, 255, cv2.THRESH_BINARY)[1]
-    img_dilation = cv2.dilate(thresh, kernel, iterations=32)
-    img_erosion = cv2.erode(img_dilation, kernel, iterations=33)
+    
+    thresha = cv2.threshold(result_g, 35, 255, cv2.THRESH_TOZERO_INV)[1]
+    thresh = cv2.threshold(thresha, 5, 255, cv2.THRESH_BINARY)[1]
+    img_dilation = cv2.dilate(thresh, kernel, iterations=69)
+    img_erosion = cv2.erode(img_dilation, kernel, iterations=59)
     
     img_erosion2 = cv2.erode(img_erosion, kernel, iterations=1)
-    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=55)
+    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=75)
     
-    finalE = cv2.erode(img_dilation2, kernel, iterations=70)
+    finalE = cv2.erode(img_dilation2, kernel, iterations=65)
 
     res = None
     br = None
     cnts = cv2.findContours(finalE, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cnts = cnts[0] if len(cnts) == 2 else cnts[1]
-    for c in cnts:
+    
+    if cnts[1] is not None:
+        cnts = cnts[0] if len(cnts) == 2 else cnts[1]
         c = max(cnts, key = cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
         if (w < 1100) and (h < 600) and (w >= 300) and (h > 200):
@@ -104,30 +108,33 @@ def process(rgb, hsv, frame):
 
 def frameIO():
     thread_num = multiprocessing.cpu_count()
-    pool = ThreadPool(processes=thread_num)
+    pool = ThreadPool(processes=1)
     pending_task = deque()
     
     video_name = "15FPS_720PL.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
-    #fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
+    fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
     prev_frame = None
     pts = deque(maxlen = 20)
     dirX = ''
+    counter = 0
     while cap.isOpened():
         while len(pending_task) > 0 and pending_task[0].ready():
             #print(len(pending_task))
             res, diX, debug = pending_task.popleft().get()
             pts.appendleft(diX)
+            counter += 1
             cv2.imshow('result', res)
             
             if debug is not None:
-                cv2.imshow('debug', debug)   
-            if pts[-1] and pts[0] is not None and len(pts) >= 2:
+                cv2.imshow('debug', debug)
+            if pts[-1] and pts[0] is not None and len(pts) >= 2 and counter > 6:
                 dX = pts.pop() - pts.popleft()
-                if np.abs(dX) > 100:
+                if np.abs(dX) > 200:
                     dirX = 'Left' if np.sign(dX) == 1 else 'Right'
-                    print("dirx ", dirX)
+                    print("dirx ", dirX, dX)
+                counter = 0
             
                 
         if len(pending_task) < thread_num:

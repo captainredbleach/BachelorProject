@@ -28,7 +28,7 @@ def filtering(frame):
 
 @storeInQueue
 def findbox(TempC, kernel, rgb, x,y,w,h):
-    lower_b = np.array([25, 50, 100])
+    lower_b = np.array([20, 50, 100])
     upper_b = np.array([30, 100, 130])
     mask_b = cv2.inRange(TempC, lower_b, upper_b)
     result_b = cv2.bitwise_and(rgb[y:y + h, x:x + w], rgb[y:y + h, x:x + w], mask = mask_b)
@@ -50,7 +50,7 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
             cY = int(M["m01"] / M["m00"])
             cv2.circle(rgb[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
     if cX != 0:
-        return (x + cX), None
+        return (x + cX), mask_b
     else:
         return None, None
 
@@ -64,12 +64,12 @@ def process(rgb, hsv, frame):
     #lower_g = np.array([5, 30, 10])
     #upper_g = np.array([20, 255, 30])
     lower_g = np.array([0, 25, 75])
-    upper_g = np.array([360, 30, 110])
- 
+    upper_g = np.array([360, 30, 120])
+    hsv = filtering(hsv)
     # preparing the mask to overlay
     mask_g = cv2.inRange(hsv, lower_g, upper_g)
     mask_g = cv2.dilate(mask_g, None, iterations=2)
-    mask_g = cv2.erode(mask_g, None, iterations=2)
+    mask_g = cv2.erode(mask_g, None, iterations=3)
     
     mask_E = cv2.bitwise_and(mask_g, edge)
 
@@ -99,16 +99,16 @@ def process(rgb, hsv, frame):
         if (w < 1100) and (h < 600) and (w >= 300) and (h > 200):
             cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
             TempC = hsv[y:y + h, x:x + w]
-            t1 = Thread(target=findbox, args=(TempC, kernel, rgb, x,y,w,h)) 
+            t1 = Thread(target=findbox, args=(TempC, kernel, rgb, x,y,w,h))
             t1.start()
             res, br = my_queue.get()
             
     
-    return rgb, res, br
+    return rgb, res, mask_E
 
 def frameIO():
     thread_num = multiprocessing.cpu_count()
-    pool = ThreadPool(processes=1)
+    pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
     video_name = "15FPS_720PL.mp4"
@@ -131,7 +131,7 @@ def frameIO():
                 cv2.imshow('debug', debug)
             if pts[-1] and pts[0] is not None and len(pts) >= 2 and counter > 6:
                 dX = pts.pop() - pts.popleft()
-                if np.abs(dX) > 200:
+                if 500 > np.abs(dX) > 200:
                     dirX = 'Left' if np.sign(dX) == 1 else 'Right'
                     print("dirx ", dirX, dX)
                 counter = 0

@@ -1,11 +1,17 @@
+import multiprocessing
+from threading import Thread
 import numpy as np
 import cv2
-import time
 import os
+import time
+from multiprocessing.pool import ThreadPool
+from collections import deque
+import queue
 
 
+    
 
-def draw_flow(img, flow, step=16):
+def draw_flow(img, flow, step=24):
 
     h, w = img.shape[:2]
     y, x = np.mgrid[step/2:h:step, step/2:w:step].reshape(2,-1).astype(int)
@@ -22,24 +28,18 @@ def draw_flow(img, flow, step=16):
 
     return img_bgr
 
-
-def draw_hsv(flow):
-
-    h, w = flow.shape[:2]
-    fx, fy = flow[:,:,0], flow[:,:,1]
-
-    ang = np.arctan2(fy, fx) + np.pi
-    v = np.sqrt(fx*fx+fy*fy)
-
-    hsv = np.zeros((h, w, 3), np.uint8)
-    hsv[...,0] = ang*(180/np.pi/2)
-    hsv[...,1] = 255
-    hsv[...,2] = np.minimum(v*4, 255)
+def calc(prevgray, gray, hsv):
+    flow = cv2.calcOpticalFlowFarneback(prevgray, gray, None, 0.3, 10, 25, 2, 15, 1.7, 0)
+    h = draw_flow(gray, flow)
+    mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+    hsv[..., 0] = ang*180/np.pi/2
+    hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
     bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    return bgr, h
 
-    return bgr
-
-
+thread_num = multiprocessing.cpu_count()
+pool = ThreadPool(processes=thread_num)
+pending_task = deque()
 
 
 video_name = "15FPS_720PL.mp4"
@@ -47,39 +47,29 @@ path = os.path.dirname(os.path.realpath(__file__))
 cap = cv2.VideoCapture(os.path.join(path, video_name))
 
 suc, prev = cap.read()
-prev = cv2.resize(prev, (640, 360))
 prevgray = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
-
+hsv = np.zeros_like(prev)
+hsv[..., 1] = 255
 
 while True:
+    while len(pending_task) > 0 and pending_task[0].ready():
+            #print(len(pending_task))
+            f, h = pending_task.popleft().get()
+            cv2.imshow('flow', f)
+            cv2.imshow('flow HSV', h)
+            
+    if len(pending_task) < thread_num:
+        suc, img = cap.read()
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    suc, img = cap.read()
-    img = cv2.resize(img, (640, 360))
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # start time to calculate FPS
-    start = time.time()
-
-
-    flow = cv2.calcOpticalFlowFarneback(prevgray, gray, None, pyr_scale = 0.5, levels = 5, winsize = 11, iterations = 5, poly_n = 5, poly_sigma = 1.1, flags = 0)
-    
-    prevgray = gray
-
-
-    # End time
-    end = time.time()
-    # calculate the FPS for current frame detection
-    fps = 1 / (end-start)
-
-    print(f"{fps:.2f} FPS")
-
-    cv2.imshow('flow', draw_flow(gray, flow))
-    cv2.imshow('flow HSV', draw_hsv(flow))
+        task = pool.apply_async(calc, (prevgray, gray, hsv))
+        pending_task.append(task)
 
 
-    key = cv2.waitKey(1)
-    if key == ord('q'):
-        break
+        prevgray = gray
+    time.sleep(1 / 15)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
 
 cap.release()

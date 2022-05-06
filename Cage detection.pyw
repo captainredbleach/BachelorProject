@@ -104,7 +104,7 @@ def process(rgb, hsv, frame):
             res, br = my_queue.get()
             
     
-    return rgb, res, mask_E
+    return rgb, res, None
 
 def frameIO():
     thread_num = multiprocessing.cpu_count()

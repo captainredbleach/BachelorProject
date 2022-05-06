@@ -99,6 +99,7 @@ def process(rgb, hsv, frame):
             TempC = hsv[y:y + h, x:x + w]
             t1 = Thread(target=findbox, args=(TempC, kernel, rgb, x,y,w,h))
             t1.start()
+            t1.join()
             res, br = my_queue.get()
             
     

@@ -8,10 +8,19 @@ from multiprocessing.pool import ThreadPool
 from collections import deque
 import queue
 
+my_queue = queue.Queue()
 
+def storeInQueue(f):
+    def wrapper(*args):
+        my_queue.put(f(*args))
+    return wrapper
     
-
+@storeInQueue
 def draw_flow(img, flow, step=24):
+    mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+    hsv[..., 0] = ang*180/np.pi/2
+    hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
+    bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
     h, w = img.shape[:2]
     y, x = np.mgrid[step/2:h:step, step/2:w:step].reshape(2,-1).astype(int)
@@ -25,17 +34,17 @@ def draw_flow(img, flow, step=24):
 
     for (x1, y1), (_x2, _y2) in lines:
         cv2.circle(img_bgr, (x1, y1), 1, (0, 255, 0), -1)
-
-    return img_bgr
+        
+    return img_bgr, bgr
 
 def calc(prevgray, gray, hsv):
     flow = cv2.calcOpticalFlowFarneback(prevgray, gray, None, 0.3, 10, 25, 2, 15, 1.7, 0)
-    h = draw_flow(gray, flow)
-    mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-    hsv[..., 0] = ang*180/np.pi/2
-    hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
-    bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-    return bgr, h
+    t1 = Thread(target=draw_flow, args=(gray, flow))
+    t1.start()
+    t1.join()
+    res, br = my_queue.get()
+    
+    return res, br
 
 thread_num = multiprocessing.cpu_count()
 pool = ThreadPool(processes=thread_num)

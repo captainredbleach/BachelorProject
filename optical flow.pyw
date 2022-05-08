@@ -1,6 +1,4 @@
-from cmath import nan
 import multiprocessing
-from operator import le
 from threading import Thread
 import numpy as np
 import cv2
@@ -23,7 +21,7 @@ def draw_flow(img, flow, hsv, step=24):
     hsv[..., 0] = ang*180/np.pi/2
     hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
     bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-
+    
     h, w = img.shape[:2]
     y, x = np.mgrid[step/2:h:step, step/2:w:step].reshape(2,-1).astype(int)    
     fx, fy = flow[y,x].T

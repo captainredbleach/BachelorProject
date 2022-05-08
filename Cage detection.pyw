@@ -6,14 +6,6 @@ import os
 import time
 from multiprocessing.pool import ThreadPool
 from collections import deque
-import queue
-
-my_queue = queue.Queue()
-
-def storeInQueue(f):
-    def wrapper(*args):
-        my_queue.put(f(*args))
-    return wrapper
 
 def filtering(frame):
     frame = cv2.bilateralFilter(frame, 5, 75, 75)
@@ -24,7 +16,25 @@ def filtering(frame):
     
     return frame
 
-@storeInQueue
+def draw_flow(img, prevgray, gray, step=24):
+    
+    flow = cv2.calcOpticalFlowFarneback(prevgray, gray, None, 0.3, 10, 25, 2, 15, 1.7, 0)
+    h, w = img.shape[:2]
+    y, x = np.mgrid[step/2:h:step, step/2:w:step].reshape(2,-1).astype(int)    
+    fx, fy = flow[y,x].T
+
+    lines = np.vstack([x, y, x-fx, y-fy]).T.reshape(-1, 2, 2)
+    lines = np.int32(lines + 0.5)
+    cv2.polylines(img, lines, 0, (0, 255, 0))
+
+    for (x1, y1), (_x2, _y2) in lines:
+        cv2.circle(img, (x1, y1), 1, (0, 255, 0), -1)
+    
+    direction = [fx[x] for x in np.arange(len(lines)) if np.abs(fx[x]) > 20]
+    
+    if len(direction)>=1:
+        d = np.sum(direction) // len(direction)
+
 def findbox(TempC, kernel, rgb, x,y,w,h):
     lower_b = np.array([20, 50, 100])
     upper_b = np.array([30, 100, 130])
@@ -53,12 +63,21 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
         return None, None
 
 
-def process(rgb, hsv, frame):
+def process(cframe, pframe):
+    bgr = cframe.copy()
+    
+    hsv = cv2.cvtColor(cframe, cv2.COLOR_BGR2HSV_FULL)
+    diff = cv2.absdiff(pframe, cframe, 0.95)
+    cv2.normalize(diff, diff, 0, 255, cv2.NORM_MINMAX)
+    diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=1, tileGridSize=(6,11))
+    diff = clahe.apply(diff)
+    
     kernel = np.ones((5,5), np.uint8)
-    edge = cv2.Canny(frame, 150, 180, apertureSize=3, L2gradient = True)
+    edge = cv2.Canny(diff, 150, 180, apertureSize=3, L2gradient = True)
     edge = cv2.dilate(edge, kernel, iterations=3)
     edge = cv2.erode(edge, kernel, iterations=8)
-    frame = filtering(frame)
+    frame = filtering(diff)
     #lower_g = np.array([5, 30, 10])
     #upper_g = np.array([20, 255, 30])
     lower_g = np.array([0, 25, 75])
@@ -95,15 +114,17 @@ def process(rgb, hsv, frame):
         c = max(cnts, key = cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
         if (w < 1100) and (h < 600) and (w >= 300) and (h > 200):
-            cv2.rectangle(rgb, (x, y), (x + w, y + h), (0,0,255), 2)
+            cv2.rectangle(bgr, (x, y), (x + w, y + h), (0,0,255), 2)
             TempC = hsv[y:y + h, x:x + w]
-            t1 = Thread(target=findbox, args=(TempC, kernel, rgb, x,y,w,h))
+            gray = cv2.cvtColor(cframe[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+            prevgray = cv2.cvtColor(pframe[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+            t1 = Thread(target=draw_flow, args=(bgr[y:y + h, x:x + w], prevgray, gray))
             t1.start()
+            res, br = findbox(TempC, kernel, bgr, x,y,w,h)
             t1.join()
-            res, br = my_queue.get()
             
     
-    return rgb, res, None
+    return bgr, res, br
 
 def frameIO():
     thread_num = multiprocessing.cpu_count()
@@ -113,7 +134,7 @@ def frameIO():
     video_name = "15FPS_720PL.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
-    fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
+    fps = np.rint(cap.get(cv2.CAP_PROP_FPS))
     prev_frame = None
     pts = deque(maxlen = 20)
     dirX = ''
@@ -144,16 +165,7 @@ def frameIO():
                 
         
                 if prev_frame is not None:
-
-                    rgb = cur_frame.copy()
-                    hsv = cv2.cvtColor(rgb, cv2.COLOR_BGR2HSV_FULL)
-                    diff = cv2.absdiff(prev_frame, rgb, 0.95)
-                    cv2.normalize(diff, diff, 0, 255, cv2.NORM_MINMAX)
-                    diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-                    clahe = cv2.createCLAHE(clipLimit=1, tileGridSize=(6,11))
-                    diff = clahe.apply(diff)
-
-                    task = pool.apply_async(process, (rgb, hsv, diff))
+                    task = pool.apply_async(process, (cur_frame, prev_frame))
                     pending_task.append(task)
                     
             else:
@@ -161,7 +173,7 @@ def frameIO():
             
         if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-        #time.sleep(1 / fps)
+        time.sleep(1 / fps)
         prev_frame = cur_frame.copy()
     cv2.destroyAllWindows()
     cap.release()

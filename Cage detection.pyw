@@ -31,7 +31,7 @@ def draw_flow(img, prevgray, gray, step=24):
     for (x1, y1), (_x2, _y2) in lines:
         cv2.circle(img, (x1, y1), 1, (0, 255, 0), -1)
     
-    direction = [fx[x] for x in np.arange(len(lines)) if np.abs(fx[x]) > 20]
+    direction = [fx[x] for x in range(len(lines)) if np.abs(fx[x]) > 20]
     
     if len(direction)>=1:
         d = np.sum(direction) // len(direction)
@@ -134,7 +134,7 @@ def process(cframe, pframe):
             t1.join()
             
     
-    return bgr, res, br
+    return bgr, res, None
 
 def frameIO():
     thread_num = multiprocessing.cpu_count()

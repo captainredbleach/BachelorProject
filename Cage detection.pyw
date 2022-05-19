@@ -7,6 +7,8 @@ import time
 from multiprocessing.pool import ThreadPool
 from collections import deque
 
+backSub = cv2.createBackgroundSubtractorMOG2(200, 32, detectShadows=False)
+
 def filtering(frame):
     frame = cv2.bilateralFilter(frame, 5, 75, 75)
     
@@ -37,8 +39,8 @@ def draw_flow(img, prevgray, gray, step=24):
         d = np.sum(direction) // len(direction)
 
 def findbox(TempC, kernel, rgb, x,y,w,h):
-    lower_b = np.array([20, 50, 100])
-    upper_b = np.array([30, 100, 130])
+    lower_b = np.array([10, 40, 100])
+    upper_b = np.array([25, 150, 180])
     mask_b = cv2.inRange(TempC, lower_b, upper_b)
     
     result_b = cv2.bitwise_and(rgb[y:y + h, x:x + w], rgb[y:y + h, x:x + w], mask = mask_b)
@@ -64,33 +66,32 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
             cv2.circle(rgb[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
             
     if cX == 0: return None, None
-    
-    return (x + cX), mask_b
+    return (x + cX), None
 
 
 def process(cframe, pframe):
     bgr = cframe.copy()
-    
-    hsv = cv2.cvtColor(cframe, cv2.COLOR_BGR2HSV_FULL)
-    diff = cv2.absdiff(pframe, cframe, 0.95)
-    cv2.normalize(diff, diff, 0, 255, cv2.NORM_MINMAX)
-    diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=1, tileGridSize=(6,11))
-    diff = clahe.apply(diff)
+    fgMask = backSub.apply(cframe)
+    fg = cv2.bitwise_and(cframe, cframe, mask = fgMask)
+    cv2.normalize(fg, fg, 0, 255, cv2.NORM_MINMAX)
+    fgg = cv2.cvtColor(fg, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=1, tileGridSize=(9,9))
+    diff = clahe.apply(fgg)
     
     kernel = np.ones((5,5), np.uint8)
     edge = cv2.Canny(diff, 150, 180, apertureSize=3, L2gradient = True)
-    edge = cv2.dilate(edge, kernel, iterations=3)
-    edge = cv2.erode(edge, kernel, iterations=8)
+    edge = cv2.dilate(edge, kernel, iterations=2)
+    edge = cv2.erode(edge, kernel, iterations=2)
     
-    
+    fg = filtering(fg)
+    hsv = cv2.cvtColor(fg, cv2.COLOR_BGR2HSV)
     hsv = filtering(hsv)
-    lower_g = np.array([0, 25, 75])
-    upper_g = np.array([360, 30, 120])
+    lower_g = np.array([0, 10, 40])
+    upper_g = np.array([180, 20, 80])
     # preparing the mask to overlay
     mask_g = cv2.inRange(hsv, lower_g, upper_g)
     mask_g = cv2.dilate(mask_g, None, iterations=2)
-    mask_g = cv2.erode(mask_g, None, iterations=3)
+    mask_g = cv2.erode(mask_g, None, iterations=2)
     
     mask_E = cv2.bitwise_and(mask_g, edge)
 
@@ -100,20 +101,24 @@ def process(cframe, pframe):
     result_g = cv2.bitwise_and(frame, frame, mask = mask_E)
     
     
-    thresha = cv2.threshold(result_g, 35, 255, cv2.THRESH_TOZERO_INV)[1]
-    thresh = cv2.threshold(thresha, 5, 255, cv2.THRESH_BINARY)[1]
+    thresh = cv2.threshold(result_g, 20, 255, cv2.THRESH_BINARY)[1]
     
-    img_dilation = cv2.dilate(thresh, kernel, iterations=69)
+    closening = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=35)
+    opening = cv2.morphologyEx(closening, cv2.MORPH_OPEN, kernel, iterations=60)
+    closening = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel, iterations=1)
+    
+    
+    '''img_dilation = cv2.dilate(thresh, kernel, iterations=69)
     img_erosion = cv2.erode(img_dilation, kernel, iterations=59)
     
     img_erosion2 = cv2.erode(img_erosion, kernel, iterations=1)
     img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=75)
     
-    finalE = cv2.erode(img_dilation2, kernel, iterations=65)
+    finalE = cv2.erode(img_dilation2, kernel, iterations=65)'''
 
     res = None
-    br = None
-    cnts = cv2.findContours(finalE, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    debug = None
+    cnts = cv2.findContours(closening, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     if cnts[1] is not None:
         
@@ -123,18 +128,19 @@ def process(cframe, pframe):
         
         if (w < 1100) and (h < 600) and (w >= 300) and (h > 200):
             cv2.rectangle(bgr, (x, y), (x + w, y + h), (0,0,255), 2)
-            
-            TempC = hsv[y:y + h, x:x + w]
+            hsvb = cv2.cvtColor(cframe, cv2.COLOR_BGR2HSV)
+            hsvb = filtering(hsvb)
+            TempC = hsvb[y:y + h, x:x + w]
             gray = cv2.cvtColor(cframe[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
             prevgray = cv2.cvtColor(pframe[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
             
             t1 = Thread(target=draw_flow, args=(bgr[y:y + h, x:x + w], prevgray, gray))
             t1.start()
-            res, br = findbox(TempC, kernel, bgr, x,y,w,h)
+            res, debug = findbox(TempC, kernel, bgr, x,y,w,h)
             t1.join()
             
     
-    return bgr, res, None
+    return bgr, res, debug
 
 def frameIO():
     thread_num = multiprocessing.cpu_count()
@@ -147,30 +153,31 @@ def frameIO():
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS))
     prev_frame = None
     
-    pts = deque(maxlen = 20)
+    pts = []
     dirX = ''
-    counter = 0
     
     while cap.isOpened():
         
         while len(pending_task) > 0 and pending_task[0].ready():
             #print(len(pending_task))
             res, diX, debug = pending_task.popleft().get()
-            pts.appendleft(diX)
-            counter += 1
+            
+            if diX is not None:
+                pts.append(diX)
+                
             cv2.imshow('result', res)
             
             if debug is not None:
                 cv2.imshow('debug', debug)
                 
-            if pts[-1] and pts[0] is not None and len(pts) >= 2 and counter > 6:
-                dX = pts.pop() - pts.popleft()
+            if len(pts) >= 1:
+                dX = pts[-1] - pts[0]
                 
-                if 500 > np.abs(dX) > 200:
-                    dirX = 'Left' if np.sign(dX) == 1 else 'Right'
+                if np.abs(dX) > 100:
+                    dirX = 'Right' if np.sign(dX) == 1 else 'Left'
                     print("dirx ", dirX, dX)
-                    
-                counter = 0
+                    dX = 0
+                    pts = []
             
                 
         if len(pending_task) < thread_num:

@@ -18,26 +18,6 @@ def filtering(frame):
     
     return frame
 
-def draw_flow(img, prevgray, gray, step=24):
-    
-    flow = cv2.calcOpticalFlowFarneback(prevgray, gray, None, 0.3, 10, 25, 2, 15, 1.7, 0)
-    
-    h, w = img.shape[:2]
-    y, x = np.mgrid[step/2:h:step, step/2:w:step].reshape(2,-1).astype(int)    
-    fx, fy = flow[y,x].T
-
-    lines = np.vstack([x, y, x-fx, y-fy]).T.reshape(-1, 2, 2)
-    lines = np.int32(lines + 0.5)
-    cv2.polylines(img, lines, 0, (0, 255, 0))
-
-    for (x1, y1), (_x2, _y2) in lines:
-        cv2.circle(img, (x1, y1), 1, (0, 255, 0), -1)
-    
-    direction = [fx[x] for x in range(len(lines)) if np.abs(fx[x]) > 20]
-    
-    if len(direction)>=1:
-        d = np.sum(direction) // len(direction)
-
 def findbox(TempC, kernel, rgb, x,y,w,h):
     lower_b = np.array([10, 40, 100])
     upper_b = np.array([25, 150, 180])
@@ -69,7 +49,7 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
     return (x + cX), None
 
 
-def process(cframe, pframe):
+def process(self, cframe):
     bgr = cframe.copy()
     fgMask = backSub.apply(cframe)
     fg = cv2.bitwise_and(cframe, cframe, mask = fgMask)
@@ -106,15 +86,6 @@ def process(cframe, pframe):
     closening = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=35)
     opening = cv2.morphologyEx(closening, cv2.MORPH_OPEN, kernel, iterations=60)
     closening = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel, iterations=1)
-    
-    
-    '''img_dilation = cv2.dilate(thresh, kernel, iterations=69)
-    img_erosion = cv2.erode(img_dilation, kernel, iterations=59)
-    
-    img_erosion2 = cv2.erode(img_erosion, kernel, iterations=1)
-    img_dilation2 = cv2.dilate(img_erosion2, kernel, iterations=75)
-    
-    finalE = cv2.erode(img_dilation2, kernel, iterations=65)'''
 
     res = None
     debug = None
@@ -131,15 +102,8 @@ def process(cframe, pframe):
             hsvb = cv2.cvtColor(cframe, cv2.COLOR_BGR2HSV)
             hsvb = filtering(hsvb)
             TempC = hsvb[y:y + h, x:x + w]
-            gray = cv2.cvtColor(cframe[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
-            prevgray = cv2.cvtColor(pframe[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
-            
-            t1 = Thread(target=draw_flow, args=(bgr[y:y + h, x:x + w], prevgray, gray))
-            t1.start()
             res, debug = findbox(TempC, kernel, bgr, x,y,w,h)
-            t1.join()
-            
-    
+
     return bgr, res, debug
 
 def frameIO():
@@ -187,15 +151,13 @@ def frameIO():
             
             cur_frame = cv2.resize(cur_frame, (1280, 720))
     
-            if prev_frame is not None:
-                task = pool.apply_async(process, (cur_frame, prev_frame))
-                pending_task.append(task)
+            task = pool.apply_async(process, (0, cur_frame))
+            pending_task.append(task)
             
         if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
             
         time.sleep(1 / fps)
-        prev_frame = cur_frame.copy()
         
     cv2.destroyAllWindows()
     cap.release()

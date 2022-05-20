@@ -7,8 +7,6 @@ import time
 from multiprocessing.pool import ThreadPool
 from collections import deque
 
-backSub = cv2.createBackgroundSubtractorMOG2(200, 32, detectShadows=False)
-
 def filtering(frame):
     frame = cv2.bilateralFilter(frame, 5, 75, 75)
     
@@ -27,10 +25,11 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
     result_b = cv2.cvtColor(result_b, cv2.COLOR_BGR2GRAY)
     
     thresh_b = cv2.threshold(result_b, 1, 255, cv2.THRESH_BINARY)[1]
-    dilation_b = cv2.dilate(thresh_b, kernel, iterations=2)
-    erosion_b = cv2.dilate(dilation_b, kernel, iterations=3)
+    closening = cv2.morphologyEx(thresh_b, cv2.MORPH_CLOSE, kernel, iterations=2)
+    opening = cv2.morphologyEx(closening, cv2.MORPH_OPEN, kernel, iterations=8)
+    closening = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel, iterations=2)
     
-    bcnts = cv2.findContours(erosion_b, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    bcnts = cv2.findContours(closening, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     cX = 0
     if bcnts[1] is not None:
@@ -38,7 +37,7 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
         bcnts = bcnts[0] if len(bcnts) == 2 else bcnts[1]
         bc = max(bcnts, key = cv2.contourArea)
         bx,by,bw,bh = cv2.boundingRect(bc)
-        if (bw >= 100) and (bh > 100):
+        if (bw >= 50) and (bh > 50):
             cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
             M = cv2.moments(bc)
             cX = int(M["m10"] / M["m00"])
@@ -46,10 +45,10 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
             cv2.circle(rgb[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
             
     if cX == 0: return None, None
-    return (x + cX), None
+    return (x + cX), opening
 
 
-def process(self, cframe):
+def process(backSub, cframe):
     bgr = cframe.copy()
     fgMask = backSub.apply(cframe)
     fg = cv2.bitwise_and(cframe, cframe, mask = fgMask)
@@ -66,6 +65,7 @@ def process(self, cframe):
     fg = filtering(fg)
     hsv = cv2.cvtColor(fg, cv2.COLOR_BGR2HSV)
     hsv = filtering(hsv)
+    
     lower_g = np.array([0, 10, 40])
     upper_g = np.array([180, 20, 80])
     # preparing the mask to overlay
@@ -115,7 +115,7 @@ def frameIO():
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS))
-    prev_frame = None
+    backSub = cv2.createBackgroundSubtractorMOG2(200, 32, detectShadows=False)
     
     pts = []
     dirX = ''
@@ -151,7 +151,7 @@ def frameIO():
             
             cur_frame = cv2.resize(cur_frame, (1280, 720))
     
-            task = pool.apply_async(process, (0, cur_frame))
+            task = pool.apply_async(process, (backSub, cur_frame))
             pending_task.append(task)
             
         if cv2.waitKey(1) & 0xFF == ord('q'):

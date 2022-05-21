@@ -45,7 +45,7 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
             cY = int(M["m01"] / M["m00"])
             cv2.circle(rgb[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
             
-    if cX == 0 or (280 > (x + cX) > 1000): return None, opening
+    if cX == 0 or (280 > (x + cX) > 1000): return None, None
     
     return (x + cX), None
 
@@ -118,7 +118,7 @@ def frameIO():
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "VIDEO_CLIPS//cage1-fewpackages_2.mp4"
+    video_name = "VIDEO_CLIPS//cage1-fewpackages_1.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS))
@@ -143,7 +143,7 @@ def frameIO():
                 
             cv2.imshow('result', res)
             
-            cv2.imshow('d', res[0:720,280:1000])
+            #cv2.imshow('d', res[0:720,280:1000])
             
             if debug is not None:
                 cv2.imshow('debug', debug)
@@ -190,7 +190,7 @@ def frameIO():
             task = pool.apply_async(process, (backSub, cur_frame))
             pending_task.append(task)
             
-        if cv2.waitKey(0) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
                 #continue
             

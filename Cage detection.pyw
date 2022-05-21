@@ -1,7 +1,5 @@
-from cgitb import grey
 import multiprocessing
 from threading import Thread
-from turtle import color
 import numpy as np
 import cv2
 import os

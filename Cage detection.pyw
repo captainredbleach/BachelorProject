@@ -16,19 +16,19 @@ def filtering(frame):
     
     return frame
 
-def findbox(TempC, kernel, rgb, x,y,w,h):
-    Lower_box = np.array([10, 50, 80])
-    Upper_box = np.array([25, 110, 255])
-    mask_box = cv2.inRange(TempC, Lower_box, Upper_box)
-    mask_box = cv2.morphologyEx(mask_box, cv2.MORPH_CLOSE, kernel, iterations=2)
+def findbox(hsv_Box, kernel, rgb, x,y,w,h):
+    Lower_box = np.array([5, 80, 60])
+    Upper_box = np.array([20, 120, 255])
+    mask_box = cv2.inRange(hsv_Box, Lower_box, Upper_box)
+    mask_box = cv2.morphologyEx(mask_box, cv2.MORPH_DILATE, kernel, iterations=4)
     
     result_box = cv2.bitwise_and(rgb[y:y + h, x:x + w], rgb[y:y + h, x:x + w], mask = mask_box)
     result_box = cv2.cvtColor(result_box, cv2.COLOR_BGR2GRAY)
     
     thresh_box = cv2.threshold(result_box, 1, 255, cv2.THRESH_BINARY)[1]
-    closening = cv2.morphologyEx(thresh_box, cv2.MORPH_CLOSE, kernel, iterations=4)
-    opening = cv2.morphologyEx(closening, cv2.MORPH_OPEN, kernel, iterations=10)
-    closening = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel, iterations=4)
+    closening = cv2.morphologyEx(thresh_box, cv2.MORPH_CLOSE, kernel, iterations=6)
+    opening = cv2.morphologyEx(closening, cv2.MORPH_OPEN, kernel, iterations=8)
+    closening = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel, iterations=8)
     
     Box_Contours = cv2.findContours(closening, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
@@ -38,14 +38,14 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
         Box_Contours = Box_Contours[0] if len(Box_Contours) == 2 else Box_Contours[1]
         bc = max(Box_Contours, key = cv2.contourArea)
         bx,by,bw,bh = cv2.boundingRect(bc)
-        if (bw >= 75) and (bh > 75):
+        if (bw >= 50) and (bh > 50):
             cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
             M = cv2.moments(bc)
             cX = int(M["m10"] / M["m00"])
             cY = int(M["m01"] / M["m00"])
             cv2.circle(rgb[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
         
-    if cX == 0 or 280 > (x + cX) or (x + cX) > 1000: return None, None
+    if cX == 0 or 99 > (x + cX) or (x + cX) > 1179: return None, None
     
     return (x + cX), None
 
@@ -64,22 +64,23 @@ def process(backSub, cframe):
     
     
     edge = cv2.Canny(diff, 150, 160, apertureSize=3, L2gradient = True)
-    edge = cv2.morphologyEx(edge, cv2.MORPH_DILATE, kernel, iterations=1)
+    edge = cv2.morphologyEx(edge, cv2.MORPH_DILATE, kernel, iterations=4)
     
     Foreground = filtering(Foreground)
     hsv = cv2.cvtColor(Foreground, cv2.COLOR_BGR2HSV)
     hsv = filtering(hsv)
     
     Lower_Grey = np.array([0, 10, 30])
-    Upper_Grey = np.array([180, 50, 200])
+    Upper_Grey = np.array([180, 40, 200])
     # preparing the mask to overlay
     GreyMask = cv2.inRange(hsv, Lower_Grey, Upper_Grey)
     GreyMask = cv2.morphologyEx(GreyMask, cv2.MORPH_CLOSE, kernel, iterations=4)
+    GreyMask = cv2.morphologyEx(GreyMask, cv2.MORPH_OPEN, kernel, iterations=4)
     
     
     Combined_Mask = cv2.bitwise_and(GreyMask, edge)
-    Combined_Mask = cv2.morphologyEx(Combined_Mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-    Combined_Mask = cv2.morphologyEx(Combined_Mask, cv2.MORPH_ERODE, kernel, iterations=2)
+    Combined_Mask = cv2.morphologyEx(Combined_Mask, cv2.MORPH_CLOSE, kernel, iterations=4)
+    Combined_Mask = cv2.morphologyEx(Combined_Mask, cv2.MORPH_ERODE, kernel, iterations=4)
 
     # The black region in the mask has the value of 0,
     # so when multiplied with original image removes all non-grey regions
@@ -87,8 +88,8 @@ def process(backSub, cframe):
     Cage_Isolated = cv2.bitwise_and(frame, frame, mask = Combined_Mask)
     
     
-    thresha = cv2.threshold(Cage_Isolated, 100, 255, cv2.THRESH_TOZERO_INV)[1]
-    thresh = cv2.threshold(thresha, 5, 255, cv2.THRESH_BINARY)[1]
+    thresha = cv2.threshold(Cage_Isolated, 140, 255, cv2.THRESH_TOZERO_INV)[1]
+    thresh = cv2.threshold(thresha, 20, 255, cv2.THRESH_BINARY)[1]
     
     
     closening = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=60)
@@ -118,10 +119,10 @@ def frameIO():
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "VIDEO_CLIPS//cage2-empty_2.mp4"
+    video_name = "15FPS_720PL.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
-    fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
+    fps = np.rint(cap.get(cv2.CAP_PROP_FPS))
     backSub = cv2.createBackgroundSubtractorKNN(detectShadows=False)
     
     pts = []
@@ -139,12 +140,11 @@ def frameIO():
             if diX is not None:
                 pts.append(diX)
                 watchdog = 0
-                print(pts)
                 #print(diX)
                 
             cv2.imshow('result', res)
             
-            #cv2.imshow('d', res[0:720,280:1000])
+            #cv2.imshow('d', res[0:720,240:1040])
             
             if debug is not None:
                 cv2.imshow('debug', debug)
@@ -157,9 +157,9 @@ def frameIO():
                     if len(pts) <= 11:
                         print('\033[91m'+"ERROR: Sample size is too small") #Color red
                         Warningtag = 1
-                    elif len(pts) <= 21:
+                    elif len(pts) < 20:
                         print('\033[93m'+"WARNING: Sample size is small") #Color orange
-                        print(pts)
+                        #print(pts)
                     else:
                         print('\033[92m') #Color green
 
@@ -191,9 +191,9 @@ def frameIO():
             task = pool.apply_async(process, (backSub, cur_frame))
             pending_task.append(task)
             
-        if cv2.waitKey(0) & 0xFF == ord('q'):
-                #break
-                continue
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+                #continue
             
         time.sleep(1 / fps)
         

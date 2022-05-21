@@ -20,14 +20,15 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
     Lower_box = np.array([10, 50, 80])
     Upper_box = np.array([25, 110, 255])
     mask_box = cv2.inRange(TempC, Lower_box, Upper_box)
+    mask_box = cv2.morphologyEx(mask_box, cv2.MORPH_CLOSE, kernel, iterations=2)
     
     result_box = cv2.bitwise_and(rgb[y:y + h, x:x + w], rgb[y:y + h, x:x + w], mask = mask_box)
     result_box = cv2.cvtColor(result_box, cv2.COLOR_BGR2GRAY)
     
     thresh_box = cv2.threshold(result_box, 1, 255, cv2.THRESH_BINARY)[1]
-    closening = cv2.morphologyEx(thresh_box, cv2.MORPH_CLOSE, kernel, iterations=2)
-    opening = cv2.morphologyEx(closening, cv2.MORPH_OPEN, kernel, iterations=8)
-    closening = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel, iterations=2)
+    closening = cv2.morphologyEx(thresh_box, cv2.MORPH_CLOSE, kernel, iterations=4)
+    opening = cv2.morphologyEx(closening, cv2.MORPH_OPEN, kernel, iterations=10)
+    closening = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel, iterations=4)
     
     Box_Contours = cv2.findContours(closening, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
@@ -44,12 +45,9 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
             cY = int(M["m01"] / M["m00"])
             cv2.circle(rgb[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
             
-    if cX == 0: return None, None
+    if cX == 0 or (280 > (x + cX) > 1000): return None, opening
     
-    if 280 < (x + cX) < 1000:
-        return (x + cX), None
-    
-    return None, None
+    return (x + cX), None
 
 
 def process(backSub, cframe):
@@ -120,10 +118,10 @@ def frameIO():
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "VIDEO_CLIPS//cage1-packages_1.mp4"
+    video_name = "VIDEO_CLIPS//cage1-fewpackages_2.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
-    fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
+    fps = np.rint(cap.get(cv2.CAP_PROP_FPS))
     backSub = cv2.createBackgroundSubtractorKNN(100, detectShadows=False)
     
     pts = []
@@ -145,6 +143,8 @@ def frameIO():
                 
             cv2.imshow('result', res)
             
+            cv2.imshow('d', res[0:720,280:1000])
+            
             if debug is not None:
                 cv2.imshow('debug', debug)
                 
@@ -158,14 +158,15 @@ def frameIO():
                         Warningtag = 1
                     elif len(pts) <= 21:
                         print('\033[93m'+"WARNING: Sample size is small") #Color orange
+                        print(pts)
                     else:
                         print('\033[92m') #Color green
 
                     for i in range((len(pts)//2)):
                         dX = pts[i+len(pts)//2] - pts[i]
-                        if dX > 20:
+                        if dX >= 30:
                             right += 1
-                        elif dX < -20:
+                        elif dX <= -30:
                             left += 1
                     if (0.5 <= right / (left + 1) <= 2) or (0.5 <= left / (right + 1) <= 2):
                         if  Warningtag != 1:
@@ -189,7 +190,7 @@ def frameIO():
             task = pool.apply_async(process, (backSub, cur_frame))
             pending_task.append(task)
             
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(0) & 0xFF == ord('q'):
                 break
                 #continue
             

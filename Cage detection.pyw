@@ -19,8 +19,8 @@ def filtering(frame):
     return frame
 
 def findbox(TempC, kernel, rgb, x,y,w,h):
-    Lower_box = np.array([10, 40, 80])
-    Upper_box = np.array([25, 100, 255])
+    Lower_box = np.array([10, 50, 80])
+    Upper_box = np.array([25, 110, 255])
     mask_box = cv2.inRange(TempC, Lower_box, Upper_box)
     
     result_box = cv2.bitwise_and(rgb[y:y + h, x:x + w], rgb[y:y + h, x:x + w], mask = mask_box)
@@ -47,7 +47,11 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
             cv2.circle(rgb[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
             
     if cX == 0: return None, None
-    return (x + cX), None
+    
+    if 280 < (x + cX) < 1000:
+        return (x + cX), None
+    
+    return None, None
 
 
 def process(backSub, cframe):
@@ -111,14 +115,14 @@ def process(backSub, cframe):
             Box_ROI = hsv_Box[y:y + h, x:x + w]
             res, debug = findbox(Box_ROI, kernel, bgr, x,y,w,h)
 
-    return bgr, res, thresh
+    return bgr, res, debug
 
 def frameIO():
     thread_num = multiprocessing.cpu_count()
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "15FPS_720PL.mp4"
+    video_name = "VIDEO_CLIPS//cage1-packages_1.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num

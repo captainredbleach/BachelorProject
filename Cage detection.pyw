@@ -38,7 +38,7 @@ def findbox(TempC, kernel, rgb, x,y,w,h):
         Box_Contours = Box_Contours[0] if len(Box_Contours) == 2 else Box_Contours[1]
         bc = max(Box_Contours, key = cv2.contourArea)
         bx,by,bw,bh = cv2.boundingRect(bc)
-        if (bw >= 50) and (bh > 50):
+        if (bw >= 75) and (bh > 75):
             cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
             M = cv2.moments(bc)
             cX = int(M["m10"] / M["m00"])
@@ -118,11 +118,11 @@ def frameIO():
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "VIDEO_CLIPS//cage1-fewpackages_1.mp4"
+    video_name = "VIDEO_CLIPS//cage2-empty_1.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
-    fps = np.rint(cap.get(cv2.CAP_PROP_FPS))
-    backSub = cv2.createBackgroundSubtractorKNN(100, detectShadows=False)
+    fps = np.rint(cap.get(cv2.CAP_PROP_FPS)) * thread_num
+    backSub = cv2.createBackgroundSubtractorKNN(detectShadows=False)
     
     pts = []
     dirX = 0

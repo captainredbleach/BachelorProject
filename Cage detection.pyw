@@ -16,13 +16,13 @@ def filtering(frame):
     
     return frame
 
-def findbox(hsv_Box, kernel, rgb, x,y,w,h):
+def findbox(hsv_Box, kernel, bgr, x,y,w,h):
     Lower_box = np.array([5, 80, 60])
     Upper_box = np.array([20, 120, 255])
     mask_box = cv2.inRange(hsv_Box, Lower_box, Upper_box)
     mask_box = cv2.morphologyEx(mask_box, cv2.MORPH_DILATE, kernel, iterations=4)
     
-    result_box = cv2.bitwise_and(rgb[y:y + h, x:x + w], rgb[y:y + h, x:x + w], mask = mask_box)
+    result_box = cv2.bitwise_and(bgr[y:y + h, x:x + w], bgr[y:y + h, x:x + w], mask = mask_box)
     result_box = cv2.cvtColor(result_box, cv2.COLOR_BGR2GRAY)
     
     thresh_box = cv2.threshold(result_box, 1, 255, cv2.THRESH_BINARY)[1]
@@ -39,11 +39,11 @@ def findbox(hsv_Box, kernel, rgb, x,y,w,h):
         bc = max(Box_Contours, key = cv2.contourArea)
         bx,by,bw,bh = cv2.boundingRect(bc)
         if (bw >= 50) and (bh > 50):
-            cv2.rectangle(rgb[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
+            cv2.rectangle(bgr[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
             M = cv2.moments(bc)
             cX = int(M["m10"] / M["m00"])
             cY = int(M["m01"] / M["m00"])
-            cv2.circle(rgb[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
+            cv2.circle(bgr[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
         
     if cX == 0 or 99 > (x + cX) or (x + cX) > 1179: return None, None
     
@@ -119,7 +119,7 @@ def frameIO():
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "15FPS_720PL.mp4"
+    video_name = "VIDEO_CLIPS//person_1.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS))

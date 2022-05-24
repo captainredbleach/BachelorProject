@@ -119,7 +119,7 @@ def frameIO():
     pool = ThreadPool(processes=thread_num)
     pending_task = deque()
     
-    video_name = "VIDEO_CLIPS//person_1.mp4"
+    video_name = "15FPS_720PL.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS))

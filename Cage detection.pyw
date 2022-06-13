@@ -7,6 +7,9 @@ import time
 from multiprocessing.pool import ThreadPool
 from collections import deque
 
+# Fix backgroud subtraction so a model can be made
+# implementere optical flow
+
 def filtering(frame):
     frame = cv2.bilateralFilter(frame, 5, 75, 75)
     
@@ -45,7 +48,7 @@ def findbox(hsv_Box, kernel, bgr, x,y,w,h):
             cY = int(M["m01"] / M["m00"])
             cv2.circle(bgr[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
         
-    if cX == 0 or 99 > (x + cX) or (x + cX) > 1179: return None, None
+    if cX == 0: return None, None
     
     return (x + cX), None
 
@@ -137,7 +140,9 @@ def frameIO():
         while len(pending_task) > 0 and pending_task[0].ready():
             #print(len(pending_task))
             res, diX, debug = pending_task.popleft().get()
-            if diX is not None:
+            
+                
+            if diX is not None and (99 < diX and diX < 1179):
                 pts.append(diX)
                 watchdog = 0
                 #print(diX)
@@ -150,18 +155,11 @@ def frameIO():
                 cv2.imshow('debug', debug)
                 
             if len(pts) > 0:
-                watchdog += 1
+                if diX is not None and (99 > diX or diX > 1179):
+                    watchdog += 2
+                else: watchdog += 1
                 
                 if watchdog > 10:
-                    Warningtag = 0
-                    if len(pts) <= 11:
-                        print('\033[91m'+"ERROR: Sample size is too small") #Color red
-                        Warningtag = 1
-                    elif len(pts) < 20:
-                        print('\033[93m'+"WARNING: Sample size is small") #Color orange
-                        #print(pts)
-                    else:
-                        print('\033[92m') #Color green
 
                     for i in range((len(pts)//2)):
                         dX = pts[i+len(pts)//2] - pts[i]
@@ -169,13 +167,31 @@ def frameIO():
                             right += 1
                         elif dX <= -30:
                             left += 1
-                    if (0.5 <= right / (left + 1) <= 2) or (0.5 <= left / (right + 1) <= 2):
-                        if  Warningtag != 1:
-                            print('\033[93m') #Color orange
+                    
+                    
+                    print('\033[92m', end ="")
+                    
+                    if (0.5 <= right / (left + 1)) and (0.5 <= left / (right + 1)):
+                        print('\033[93m', end ="") #Color orange
                         print("WARNING: Result unreliable")
+                        
+                    if not((left >= 10) ^ (right >= 10)):
+                        print('\033[93m', end ="") #Color orange
+                        print("WARNING: Not enough votes")
+                        
+                    if len(pts) <= 10:
+                        print('\033[91m', end ="") #Color red
+                        print("ERROR: Sample size is too small")
+                    elif len(pts) <= 20:
+                        print('\033[93m', end ="") #Color orange
+                        print("WARNING: Sample size is small")
+                        #print(pts)
+                        
+                    
                     print(left,"|",right)
                     dirX = "Moving left" if left > right else "Moving right" if left < right else "Movement not determined"
                     print(dirX+'\033[0m') #Color reset
+                    print()
                     dX = 0
                     right = 0
                     left = 0

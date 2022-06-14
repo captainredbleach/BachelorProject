@@ -1,3 +1,4 @@
+import math
 import multiprocessing
 from threading import Thread
 import numpy as np
@@ -9,6 +10,35 @@ from collections import deque
 
 # Fix backgroud subtraction so a model can be made
 # implementere optical flow
+
+def draw_flow(img, prevgray, gray, step=36):
+    
+    flow = cv2.calcOpticalFlowFarneback(prevgray, gray, None, 0.5, 10, 25, 2, 15, 1.7, 0)
+    
+    h, w = img.shape[:2]
+    y, x = np.mgrid[step/2:h:step, step/2:w:step].reshape(2,-1).astype(int)    
+    fx, fy = flow[y,x].T
+
+    lines = np.vstack([x, y, x-fx, y-fy]).T.reshape(-1, 2, 2)
+    lines = np.int32(lines + 0.5)
+    cv2.polylines(img, lines, 0, (0, 255, 0))
+
+    for (x1, y1), (_x2, _y2) in lines:
+        cv2.circle(img, (x1, y1), 1, (0, 255, 0), -1)
+    
+    directionX = [fx[x] for x in range(len(lines)) if np.abs(fx[x]) > 15]
+    directionY = [fy[y] for y in range(len(lines)) if np.abs(fy[y]) > 15]
+    
+    if len(directionX)>=1:
+        dx = np.sum(directionX)
+        dy = np.sum(directionY)
+        tan = np.abs(dy)/np.abs(dx) 
+        if (np.abs(dx) > 150) or (np.abs(dy) > 150):
+            print(tan)
+            return tan
+
+    return None
+    
 
 def filtering(frame):
     frame = cv2.bilateralFilter(frame, 5, 75, 75)
@@ -48,12 +78,12 @@ def findbox(hsv_Box, kernel, bgr, x,y,w,h):
             cY = int(M["m01"] / M["m00"])
             cv2.circle(bgr[y:y + h, x:x + w], (cX, cY), 7, (255, 255, 255), -1)
         
-    if cX == 0: return None, None
+    if cX == 0: return None, None, False
     
-    return (x + cX), None
+    return (x + cX), None, True
 
 
-def process(backSub, cframe):
+def process(backSub, cframe, pframe):
     kernel = np.ones((5,5), np.uint8)
     bgr = cframe.copy()
     Foreground_Mask = backSub.apply(cframe)
@@ -100,8 +130,11 @@ def process(backSub, cframe):
 
     res = None
     debug = None
+    Tan = None
     Contours = cv2.findContours(opening, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
+    CframeGrey = cv2.cvtColor(cframe, cv2.COLOR_BGR2GRAY)
+    PframeGrey = cv2.cvtColor(pframe, cv2.COLOR_BGR2GRAY)
     if Contours[1] is not None:
         
         Contours = Contours[0] if len(Contours) == 2 else Contours[1]
@@ -113,9 +146,12 @@ def process(backSub, cframe):
             hsv_Box = cv2.cvtColor(cframe, cv2.COLOR_BGR2HSV)
             hsv_Box = filtering(hsv_Box)
             Box_ROI = hsv_Box[y:y + h, x:x + w]
-            res, debug = findbox(Box_ROI, kernel, bgr, x,y,w,h)
+            
+            res, debug, findflow = findbox(Box_ROI, kernel, bgr, x,y,w,h)
+            if findflow:
+                Tan = draw_flow(bgr[y:y + h, x:x + w], PframeGrey[y:y + h, x:x + w], CframeGrey[y:y + h, x:x + w])
 
-    return bgr, res, debug
+    return bgr, res, Tan, debug
 
 def frameIO():
     thread_num = multiprocessing.cpu_count()
@@ -129,23 +165,28 @@ def frameIO():
     backSub = cv2.createBackgroundSubtractorKNN(detectShadows=False)
     
     pts = []
+    angleTan =[]
     dirX = 0
     right = 0
     left = 0
     watchdog = 0
     dX = 0
+    prev_frame = None
     
     while cap.isOpened():
         
         while len(pending_task) > 0 and pending_task[0].ready():
             #print(len(pending_task))
-            res, diX, debug = pending_task.popleft().get()
+            res, diX, Tan, debug = pending_task.popleft().get()
             
                 
             if diX is not None and (99 < diX and diX < 1179):
                 pts.append(diX)
                 watchdog = 0
                 #print(diX)
+                
+            if Tan is not None:
+                angleTan.append(Tan)
                 
             cv2.imshow('result', res)
             
@@ -160,6 +201,8 @@ def frameIO():
                 else: watchdog += 1
                 
                 if watchdog > 10:
+                    
+                        
 
                     for i in range((len(pts)//2)):
                         dX = pts[i+len(pts)//2] - pts[i]
@@ -169,7 +212,9 @@ def frameIO():
                             left += 1
                     
                     
-                    print('\033[92m', end ="")
+                    print('\033[92m', end ="") #color green
+                    
+                    
                     
                     if (0.5 <= right / (left + 1)) and (0.5 <= left / (right + 1)):
                         print('\033[93m', end ="") #Color orange
@@ -185,9 +230,17 @@ def frameIO():
                     elif len(pts) <= 20:
                         print('\033[93m', end ="") #Color orange
                         print("WARNING: Sample size is small")
-                        #print(pts)
                         
+
+                    if len(angleTan) < 1:
+                        print('\033[91m', end ="") #Color red
+                        print("ERROR: Angle can not be determined")
+                    elif np.average(angleTan)>=1:
+                        print('\033[91m', end ="") #Color red
+                        print("ERROR: Movement is vertical")
                     
+                    if len(angleTan) >= 1:
+                        print("Average tangent:",np.average(angleTan))
                     print(left,"|",right)
                     dirX = "Moving left" if left > right else "Moving right" if left < right else "Movement not determined"
                     print(dirX+'\033[0m') #Color reset
@@ -196,6 +249,7 @@ def frameIO():
                     right = 0
                     left = 0
                     pts = []
+                    angleTan =[]
 
         if len(pending_task) < thread_num:
             ret, cur_frame = cap.read()
@@ -203,10 +257,11 @@ def frameIO():
                 break
             
             cur_frame = cv2.resize(cur_frame, (1280, 720))
-    
-            task = pool.apply_async(process, (backSub, cur_frame))
-            pending_task.append(task)
-            
+            if prev_frame is not None:
+                task = pool.apply_async(process, (backSub, cur_frame, prev_frame))
+                pending_task.append(task)
+        
+        prev_frame = cur_frame.copy()
         if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
                 #continue

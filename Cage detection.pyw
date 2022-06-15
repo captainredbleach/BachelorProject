@@ -8,8 +8,6 @@ import time
 from multiprocessing.pool import ThreadPool
 from collections import deque
 
-# Fix backgroud subtraction so a model can be made
-# implementere optical flow
 
 def draw_flow(img, prevgray, gray, step=36):
     
@@ -33,8 +31,7 @@ def draw_flow(img, prevgray, gray, step=36):
         dx = np.sum(directionX)
         dy = np.sum(directionY)
         tan = np.abs(dy)/np.abs(dx) 
-        if (np.abs(dx) > 150) or (np.abs(dy) > 150):
-            print(tan)
+        if (np.abs(dx) > 300) or (np.abs(dy) > 300):
             return tan
 
     return None
@@ -50,8 +47,8 @@ def filtering(frame):
     return frame
 
 def findbox(hsv_Box, kernel, bgr, x,y,w,h):
-    Lower_box = np.array([5, 80, 60])
-    Upper_box = np.array([20, 120, 255])
+    Lower_box = np.array([10, 70, 60])
+    Upper_box = np.array([25, 85, 255])
     mask_box = cv2.inRange(hsv_Box, Lower_box, Upper_box)
     mask_box = cv2.morphologyEx(mask_box, cv2.MORPH_DILATE, kernel, iterations=4)
     
@@ -71,7 +68,7 @@ def findbox(hsv_Box, kernel, bgr, x,y,w,h):
         Box_Contours = Box_Contours[0] if len(Box_Contours) == 2 else Box_Contours[1]
         bc = max(Box_Contours, key = cv2.contourArea)
         bx,by,bw,bh = cv2.boundingRect(bc)
-        if (bw >= 50) and (bh > 50):
+        if (bw >= 75) and (bh >= 75):
             cv2.rectangle(bgr[y:y + h, x:x + w], (bx, by), (bx + bw, by + bh), (0,0,255), 2)
             M = cv2.moments(bc)
             cX = int(M["m10"] / M["m00"])
@@ -86,7 +83,7 @@ def findbox(hsv_Box, kernel, bgr, x,y,w,h):
 def process(backSub, cframe, pframe):
     kernel = np.ones((5,5), np.uint8)
     bgr = cframe.copy()
-    Foreground_Mask = backSub.apply(cframe)
+    Foreground_Mask = backSub.apply(cframe, 0, learningRate = 0.9)
     Foreground_Mask = cv2.morphologyEx(Foreground_Mask, cv2.MORPH_CLOSE, kernel, iterations=10)
     Foreground_Mask = cv2.morphologyEx(Foreground_Mask, cv2.MORPH_OPEN, kernel, iterations=15)
     Foreground = cv2.bitwise_and(cframe, cframe, mask = Foreground_Mask)
@@ -100,11 +97,11 @@ def process(backSub, cframe, pframe):
     edge = cv2.morphologyEx(edge, cv2.MORPH_DILATE, kernel, iterations=4)
     
     Foreground = filtering(Foreground)
-    hsv = cv2.cvtColor(Foreground, cv2.COLOR_BGR2HSV)
+    hsv = cv2.cvtColor(Foreground, cv2.COLOR_BGR2HSV_FULL)
     hsv = filtering(hsv)
     
     Lower_Grey = np.array([0, 10, 30])
-    Upper_Grey = np.array([180, 40, 200])
+    Upper_Grey = np.array([360, 40, 200])
     # preparing the mask to overlay
     GreyMask = cv2.inRange(hsv, Lower_Grey, Upper_Grey)
     GreyMask = cv2.morphologyEx(GreyMask, cv2.MORPH_CLOSE, kernel, iterations=4)
@@ -162,7 +159,8 @@ def frameIO():
     path = os.path.dirname(os.path.realpath(__file__))
     cap = cv2.VideoCapture(os.path.join(path, video_name))
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS))
-    backSub = cv2.createBackgroundSubtractorKNN(detectShadows=False)
+    backSub = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
+
     
     pts = []
     angleTan =[]
@@ -224,10 +222,10 @@ def frameIO():
                         print('\033[93m', end ="") #Color orange
                         print("WARNING: Not enough votes")
                         
-                    if len(pts) <= 10:
+                    if len(pts) < 10:
                         print('\033[91m', end ="") #Color red
                         print("ERROR: Sample size is too small")
-                    elif len(pts) <= 20:
+                    elif len(pts) < 20:
                         print('\033[93m', end ="") #Color orange
                         print("WARNING: Sample size is small")
                         

@@ -125,11 +125,12 @@ def process(backSub, cframe, pframe):
     closening = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=60)
     opening = cv2.morphologyEx(closening, cv2.MORPH_OPEN, kernel, iterations=67)
 
+    
+    Contours = cv2.findContours(opening, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
     res = None
     debug = None
     Tan = None
-    Contours = cv2.findContours(opening, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
     CframeGrey = cv2.cvtColor(cframe, cv2.COLOR_BGR2GRAY)
     PframeGrey = cv2.cvtColor(pframe, cv2.COLOR_BGR2GRAY)
     if Contours[1] is not None:
@@ -188,8 +189,6 @@ def frameIO():
                 
             cv2.imshow('result', res)
             
-            #cv2.imshow('d', res[0:720,240:1040])
-            
             if debug is not None:
                 cv2.imshow('debug', debug)
                 
@@ -197,10 +196,8 @@ def frameIO():
                 if diX is not None and (99 > diX or diX > 1179):
                     watchdog += 2
                 else: watchdog += 1
-                
+
                 if watchdog > 10:
-                    
-                        
 
                     for i in range((len(pts)//2)):
                         dX = pts[i+len(pts)//2] - pts[i]
@@ -209,10 +206,7 @@ def frameIO():
                         elif dX <= -30:
                             left += 1
                     
-                    
                     print('\033[92m', end ="") #color green
-                    
-                    
                     
                     if (0.5 <= right / (left + 1)) and (0.5 <= left / (right + 1)):
                         print('\033[93m', end ="") #Color orange
@@ -228,7 +222,6 @@ def frameIO():
                     elif len(pts) < 20:
                         print('\033[93m', end ="") #Color orange
                         print("WARNING: Sample size is small")
-                        
 
                     if len(angleTan) < 1:
                         print('\033[91m', end ="") #Color red
@@ -236,9 +229,7 @@ def frameIO():
                     elif np.average(angleTan)>=1:
                         print('\033[91m', end ="") #Color red
                         print("ERROR: Movement is vertical")
-                    
-                    if len(angleTan) >= 1:
-                        print("Average tangent:",np.average(angleTan))
+
                     print(left,"|",right)
                     dirX = "Moving left" if left > right else "Moving right" if left < right else "Movement not determined"
                     print(dirX+'\033[0m') #Color reset

@@ -158,7 +158,7 @@ def frameIO():
     
     video_name = "15FPS_720PL.mp4"
     path = os.path.dirname(os.path.realpath(__file__))
-    cap = cv2.VideoCapture(os.path.join(path, video_name))
+    cap = cv2.VideoCapture(os.path.join(path, video_name)) #cv2.VideoCapture(0)
     fps = np.rint(cap.get(cv2.CAP_PROP_FPS))
     backSub = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
 
